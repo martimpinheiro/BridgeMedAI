@@ -1,0 +1,9 @@
+chromadb
+pyodbc
+pymupdf
+python-dotenv
+fastapi
+uvicorn
+pydantic
+numpy
+ollama
