@@ -1,0 +1,20 @@
+Se o fabricante quer por a venda um dispostivo medico a venda, tem que seguir as legislações de cada país, ou seja, tem que fazer produtos diferentes para países com legislações diferentes.
+
+Na UE as legislações são iguais em todos os países.
+
+A legislação que rege os dispositivos médicos é o MDR na UE.
+
+MDR pede ao fabricante um sistema de controlo de qualidade. ISO	13485:2016.
+
+
+Documentos de requisitos, Verificação, validação, e mais IMPORTANTE A RASTREABILIDADE é essencial, testes, processos de mitigação de riscos. 
+
+Diferença entre normas e regulamentos: MDR é a lei, diz que tens de ter varias coisas mas não especifica como faze-las, por isso existem as normas, são documentos para especificar como proceder e como documentar um software, por exemplo. (como é feito o  controlo de versões, como garantimos  qualidade do software etc.)
+
+Temos de ter especificação e requistios, o que ele vai fazer, que qualidades tem (segurança, usabilidade) e que requisitos de lei é que tem.
+
+É importante ter um esquema que simplifique como comunicam todas as partes do projeto, front-end-> back-end etc.
+
+Rule 11 do MDR-pag.144 documento MDR
+
+AI act guide- pag.14 requirements for high-risk AI systems.
