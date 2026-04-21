@@ -7,6 +7,10 @@ import {
   FileText,
   Trash2,
   ShieldCheck,
+  Upload,
+  Download,
+  ClipboardCheck,
+  CheckCircle2,
 } from "lucide-react";
 
 /* inline icon set — version-agnostic, visually cohesive with the design system */
@@ -160,20 +164,56 @@ const SUGGESTIONS = [
 ];
 
 /* ---------- helpers ---------- */
-function createConversation(title = "Nova conversa") {
+function createConversation(title = "Nova conversa", mode = "rag") {
   return {
     id: crypto.randomUUID(),
     title,
+    mode, // "rag" | "regulatory"
     messages: [],
     meta: null,
+    regulatory: mode === "regulatory"
+      ? {
+          sessionId: null,
+          step: "awaiting_description",
+          pendingAction: null,
+          lastAnalysis: null,
+          filledFields: [],
+          flaggedFields: [],
+          downloadUrl: null,
+          downloadName: null,
+          customTemplateName: null,
+        }
+      : null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 }
 
+const REGULATORY_STEPS = [
+  { key: "awaiting_description", short: "Análise", long: "1. Análise do dispositivo" },
+  { key: "awaiting_fill_confirmation", short: "Confirmar", long: "Confirmar PMCF" },
+  { key: "collecting_info", short: "Recolha", long: "2. Recolha de informação" },
+  { key: "document_ready", short: "Documento", long: "3. Documento pronto" },
+];
+
+function regulatoryStepIndex(step) {
+  if (step === "awaiting_description") return 0;
+  if (step === "awaiting_fill_confirmation") return 0.5;
+  if (step === "collecting_info") return 1;
+  if (step === "document_ready") return 2;
+  return 0;
+}
+
 function formatConversationTitle(text) {
   if (!text) return "Nova conversa";
   return text.length > 42 ? `${text.slice(0, 42)}...` : text;
+}
+
+function stripInlineWrappers(text) {
+  let t = text;
+  const boldWrap = t.match(/^\*\*(.+)\*\*$/);
+  if (boldWrap) t = boldWrap[1];
+  return t.trim();
 }
 
 function parseAnswer(raw) {
@@ -196,13 +236,25 @@ function parseAnswer(raw) {
       continue;
     }
 
+    if (/^---+$/.test(trimmed)) {
+      flushCurrent();
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch) {
+      flushCurrent();
+      blocks.push({ type: "heading", title: stripInlineWrappers(headingMatch[1]) });
+      continue;
+    }
+
     const sectionMatch = trimmed.match(/^(\d+)[\.\)]\s+(.+)$/);
     if (sectionMatch) {
       flushCurrent();
       blocks.push({
         type: "section",
         number: sectionMatch[1],
-        title: sectionMatch[2],
+        title: stripInlineWrappers(sectionMatch[2]),
       });
       continue;
     }
@@ -227,6 +279,44 @@ function parseAnswer(raw) {
   }
   flushCurrent();
   return blocks;
+}
+
+function renderInline(text) {
+  if (!text) return null;
+  const tokens = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|(?<![A-Za-z0-9])_[^_\n]+_(?![A-Za-z0-9])|(?<![A-Za-z0-9*])\*[^*\n]+\*(?![A-Za-z0-9*]))/g;
+  let last = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) tokens.push({ kind: "text", value: text.slice(last, m.index) });
+    const s = m[0];
+    if (s.startsWith("**")) tokens.push({ kind: "bold", value: s.slice(2, -2) });
+    else if (s.startsWith("`")) tokens.push({ kind: "code", value: s.slice(1, -1) });
+    else tokens.push({ kind: "em", value: s.slice(1, -1) });
+    last = m.index + s.length;
+  }
+  if (last < text.length) tokens.push({ kind: "text", value: text.slice(last) });
+  return tokens.map((t, i) => {
+    if (t.kind === "bold") return <strong key={i}>{t.value}</strong>;
+    if (t.kind === "em") return <em key={i}>{t.value}</em>;
+    if (t.kind === "code") {
+      return (
+        <code
+          key={i}
+          style={{
+            fontFamily: "var(--mono, ui-monospace, SFMono-Regular, monospace)",
+            fontSize: "0.92em",
+            background: "rgba(21,42,32,0.07)",
+            padding: "1px 5px",
+            borderRadius: 4,
+          }}
+        >
+          {t.value}
+        </code>
+      );
+    }
+    return <span key={i}>{t.value}</span>;
+  });
 }
 
 function averageScore(sources) {
@@ -558,9 +648,27 @@ function AnswerRenderer({ text }) {
                   lineHeight: 1.2,
                 }}
               >
-                {b.title}
+                {renderInline(b.title)}
               </h3>
             </div>
+          );
+        }
+        if (b.type === "heading") {
+          return (
+            <h4
+              key={i}
+              style={{
+                fontFamily: "var(--display)",
+                fontSize: 16,
+                fontWeight: 600,
+                color: "var(--forest)",
+                margin: 0,
+                marginTop: i === 0 ? 0 : 6,
+                letterSpacing: "0.01em",
+              }}
+            >
+              {renderInline(b.title)}
+            </h4>
           );
         }
         if (b.type === "list") {
@@ -599,7 +707,7 @@ function AnswerRenderer({ text }) {
                       flexShrink: 0,
                     }}
                   />
-                  <span>{it}</span>
+                  <span>{renderInline(it)}</span>
                 </li>
               ))}
             </ul>
@@ -615,7 +723,7 @@ function AnswerRenderer({ text }) {
               margin: 0,
             }}
           >
-            {b.text}
+            {renderInline(b.text)}
           </p>
         );
       })}
@@ -1411,6 +1519,404 @@ function CollapsibleList({ title, icon, items, emptyLabel, tone = "neutral" }) {
   );
 }
 
+/* ---------- regulatory flow components ---------- */
+function RegulatoryStepIndicator({ step }) {
+  const current = regulatoryStepIndex(step);
+  const steps = [
+    { key: "analysis", label: "Análise regulatória", idx: 0 },
+    { key: "collect", label: "Recolha de informação", idx: 1 },
+    { key: "document", label: "Documento PMCF", idx: 2 },
+  ];
+  return (
+    <section
+      className="bmai-stagger"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0,
+        padding: "12px 16px",
+        background: "var(--paper)",
+        border: "1px solid var(--cream-edge)",
+        borderRadius: "var(--r-lg)",
+        marginTop: 6,
+      }}
+    >
+      {steps.map((s, i) => {
+        const done = current > s.idx;
+        const active = Math.floor(current) === s.idx || (current === 0.5 && s.idx === 0);
+        const color = done
+          ? "var(--check)"
+          : active
+          ? "var(--forest)"
+          : "var(--ink-faded)";
+        return (
+          <React.Fragment key={s.key}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flex: "0 0 auto",
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  background:
+                    done || active
+                      ? color
+                      : "rgba(21,42,32,0.08)",
+                  color: done || active ? "var(--paper)" : "var(--ink-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: "var(--mono)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  transition: "all 240ms ease",
+                }}
+              >
+                {done ? <Check size={14} strokeWidth={3} /> : s.idx + 1}
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: active ? "var(--ink)" : done ? "var(--ink-muted)" : "var(--ink-faded)",
+                  fontWeight: active ? 600 : 500,
+                  letterSpacing: 0.2,
+                }}
+              >
+                {s.label}
+              </div>
+            </div>
+            {i < steps.length - 1 && (
+              <div
+                style={{
+                  flex: 1,
+                  height: 1,
+                  background: current > s.idx
+                    ? "var(--check)"
+                    : "rgba(21,42,32,0.12)",
+                  margin: "0 14px",
+                  transition: "background 240ms ease",
+                }}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </section>
+  );
+}
+
+function RegulatoryEmptyState({ customTemplateName, onUploadTemplate }) {
+  const fileInputRef = useRef(null);
+  return (
+    <div
+      className="bmai-fade-in"
+      style={{
+        minHeight: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: "16px 32px 28px",
+        maxWidth: 760,
+        margin: "0 auto",
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "4px 12px 4px 6px",
+          background: "rgba(31,59,46,0.08)",
+          borderRadius: "var(--r-pill)",
+          fontSize: 12,
+          color: "var(--forest)",
+          marginBottom: 16,
+        }}
+      >
+        <Stethoscope size={13} />
+        Análise guiada de dispositivo + preenchimento PMCF
+      </div>
+
+      <h1
+        style={{
+          fontSize: "clamp(28px, 3.8vw, 52px)",
+          fontWeight: 300,
+          lineHeight: 1.05,
+          letterSpacing: "-0.03em",
+          fontVariationSettings: '"opsz" 144, "SOFT" 20',
+          marginBottom: 12,
+        }}
+      >
+        Descreve o teu
+        <br />
+        <span
+          style={{
+            fontStyle: "italic",
+            color: "var(--forest)",
+            fontVariationSettings: '"opsz" 144, "SOFT" 100',
+            fontWeight: 400,
+          }}
+        >
+          dispositivo médico.
+        </span>
+      </h1>
+
+      <p
+        style={{
+          fontSize: 14.5,
+          lineHeight: 1.6,
+          color: "var(--ink-muted)",
+          maxWidth: 560,
+          marginBottom: 20,
+        }}
+      >
+        Em três passos: <strong>análise regulatória</strong> (classe MDR, AI Act, normas aplicáveis),
+        <strong> recolha da informação em falta</strong> e <strong>preenchimento automático do Plano PMCF</strong>.
+        Campos sensíveis ou em falta ficam sinalizados para revisão manual no documento.
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 14px",
+          background: "var(--paper)",
+          border: "1px solid var(--cream-edge)",
+          borderRadius: "var(--r-md)",
+          fontSize: 13,
+          marginBottom: 16,
+          width: "100%",
+          maxWidth: 560,
+        }}
+      >
+        <FileText size={15} color="var(--forest)" />
+        <div style={{ flex: 1 }}>
+          <div style={{ color: "var(--ink)", fontWeight: 500 }}>
+            {customTemplateName
+              ? `Template: ${customTemplateName}`
+              : "Template: TMP-CE-05 Post-Market Clinical Follow-Up Plan (pré-carregado)"}
+          </div>
+          <div style={{ color: "var(--ink-faded)", fontSize: 11, marginTop: 2 }}>
+            {customTemplateName
+              ? "Template personalizado será usado ao gerar o documento."
+              : "Podes substituir por um .docx próprio antes de começar."}
+          </div>
+        </div>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="bmai-pressable"
+          style={{
+            border: "1px solid var(--cream-edge)",
+            background: "var(--cream)",
+            color: "var(--forest)",
+            padding: "6px 12px",
+            borderRadius: "var(--r-pill)",
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <Upload size={12} />
+          {customTemplateName ? "Substituir" : "Carregar .docx"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".docx"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onUploadTemplate(f);
+            e.target.value = "";
+          }}
+        />
+      </div>
+
+      <p style={{ fontSize: 12.5, color: "var(--ink-faded)", marginBottom: 0 }}>
+        Exemplo: <em>“Termómetro digital de testa com sensor de infravermelhos e algoritmo de IA
+        que estima a temperatura central a partir da leitura periférica, para utilização em contexto
+        clínico por profissionais de saúde.”</em>
+      </p>
+    </div>
+  );
+}
+
+function RegulatoryActionBar({ pendingAction, loading, onConfirm, onFinalize, onDownload, downloadName, filledCount, flaggedCount }) {
+  if (pendingAction === "confirm_fill_pmcf") {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "12px 16px",
+          background: "rgba(31,59,46,0.06)",
+          border: "1px solid rgba(31,59,46,0.18)",
+          borderRadius: "var(--r-lg)",
+          maxWidth: 860,
+          width: "100%",
+          alignSelf: "center",
+          boxSizing: "border-box",
+          marginTop: 8,
+        }}
+      >
+        <ClipboardCheck size={16} color="var(--forest)" />
+        <span style={{ flex: 1, fontSize: 13.5, color: "var(--ink)" }}>
+          Queres que preencha o Plano PMCF com base nesta análise?
+        </span>
+        <button
+          disabled={loading}
+          onClick={() => onConfirm(false)}
+          className="bmai-pressable"
+          style={{
+            border: "1px solid var(--cream-edge)",
+            background: "var(--paper)",
+            color: "var(--ink-muted)",
+            padding: "8px 14px",
+            borderRadius: "var(--r-pill)",
+            fontSize: 13,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          Agora não
+        </button>
+        <button
+          disabled={loading}
+          onClick={() => onConfirm(true)}
+          className="bmai-pressable"
+          style={{
+            border: "none",
+            background: "var(--forest)",
+            color: "var(--paper)",
+            padding: "8px 16px",
+            borderRadius: "var(--r-pill)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: loading ? "not-allowed" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <FileText size={14} />
+          Sim, preencher PMCF
+        </button>
+      </div>
+    );
+  }
+
+  if (pendingAction === "answer_missing_info") {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 14px",
+          background: "rgba(184,117,58,0.06)",
+          border: "1px dashed rgba(184,117,58,0.30)",
+          borderRadius: "var(--r-md)",
+          maxWidth: 860,
+          width: "100%",
+          alignSelf: "center",
+          boxSizing: "border-box",
+          marginTop: 6,
+        }}
+      >
+        <AlertCircle size={15} color="var(--pending)" />
+        <span style={{ flex: 1, fontSize: 12.5, color: "var(--ink-muted)" }}>
+          Podes responder só ao que souberes. Campos em branco ficam como <em>"⚠️ Preencher manualmente"</em>.
+        </span>
+        <button
+          disabled={loading}
+          onClick={onFinalize}
+          className="bmai-pressable"
+          style={{
+            border: "1px solid rgba(184,117,58,0.4)",
+            background: "transparent",
+            color: "var(--pending)",
+            padding: "6px 12px",
+            borderRadius: "var(--r-pill)",
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          Gerar com o que há
+        </button>
+      </div>
+    );
+  }
+
+  if (pendingAction === "download_document") {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "14px 18px",
+          background: "var(--forest)",
+          color: "var(--paper)",
+          borderRadius: "var(--r-lg)",
+          maxWidth: 860,
+          width: "100%",
+          alignSelf: "center",
+          boxSizing: "border-box",
+          marginTop: 8,
+          boxShadow: "var(--shadow-card)",
+        }}
+      >
+        <CheckCircle2 size={22} color="#cdddc0" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
+            Documento PMCF pronto
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.85, fontFamily: "var(--mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {filledCount} preenchidos · {flaggedCount} para revisão manual · {downloadName}
+          </div>
+        </div>
+        <button
+          onClick={onDownload}
+          className="bmai-pressable"
+          style={{
+            border: "none",
+            background: "var(--cream)",
+            color: "var(--forest)",
+            padding: "10px 18px",
+            borderRadius: "var(--r-pill)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+          }}
+        >
+          <Download size={15} strokeWidth={2.4} />
+          Descarregar PMCF
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 /* ---------- app shell ---------- */
 export default function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
@@ -1520,6 +2026,160 @@ export default function App() {
     inputRef.current?.focus();
   }
 
+  function handleNewRegulatoryConversation() {
+    const nc = createConversation("Análise de dispositivo", "regulatory");
+    setConversations((prev) => [nc, ...prev]);
+    setActiveConversationId(nc.id);
+    setInput("");
+    setChatState({ loading: false, error: "" });
+    inputRef.current?.focus();
+  }
+
+  function updateActiveConversation(patch) {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === activeConversation?.id
+          ? {
+              ...c,
+              ...patch,
+              updatedAt: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+  }
+
+  function appendMessage(message, patch = {}) {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === activeConversation?.id
+          ? {
+              ...c,
+              ...patch,
+              messages: [...c.messages, message],
+              updatedAt: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+  }
+
+  async function handleUploadTemplate(file) {
+    if (!file || !activeConversation || activeConversation.mode !== "regulatory") return;
+    setChatState({ loading: true, error: "" });
+    try {
+      let sessionId = activeConversation.regulatory?.sessionId;
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+      }
+      const fd = new FormData();
+      fd.append("file", file);
+      const response = await fetch(
+        `${normalizedBaseUrl}/regulatory/upload-template?session_id=${encodeURIComponent(sessionId)}`,
+        { method: "POST", body: fd }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.detail || "Erro ao carregar template.");
+      updateActiveConversation({
+        regulatory: {
+          ...(activeConversation.regulatory || {}),
+          sessionId: data.session_id,
+          customTemplateName: data.template_name,
+        },
+      });
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `Template personalizado carregado: \`${data.template_name}\`. Podes agora descrever o dispositivo.`,
+      });
+      setChatState({ loading: false, error: "" });
+    } catch (error) {
+      setChatState({ loading: false, error: error.message || "Erro ao carregar template." });
+    }
+  }
+
+  async function handleRegulatoryConfirm(accept) {
+    const sessionId = activeConversation?.regulatory?.sessionId;
+    if (!sessionId) return;
+    setChatState({ loading: true, error: "" });
+    try {
+      const data = await callApi("/regulatory/confirm", {
+        method: "POST",
+        body: JSON.stringify({ session_id: sessionId, accept }),
+      });
+      appendMessage(
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: accept ? "Sim, por favor preenche o PMCF." : "Não, obrigado.",
+        },
+      );
+      appendMessage(
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: data.assistant_text,
+          regulatoryPayload: data,
+        },
+        {
+          regulatory: {
+            ...(activeConversation.regulatory || {}),
+            step: data.step,
+            pendingAction: data.pending_action,
+            filledFields: data.filled_fields || activeConversation.regulatory?.filledFields || [],
+            flaggedFields: data.flagged_fields || activeConversation.regulatory?.flaggedFields || [],
+            downloadUrl: data.download_url || activeConversation.regulatory?.downloadUrl || null,
+            downloadName: data.download_name || activeConversation.regulatory?.downloadName || null,
+          },
+        }
+      );
+      setChatState({ loading: false, error: "" });
+    } catch (error) {
+      setChatState({ loading: false, error: error.message || "Erro na confirmação." });
+    }
+  }
+
+  async function handleRegulatoryFinalize() {
+    const sessionId = activeConversation?.regulatory?.sessionId;
+    if (!sessionId) return;
+    setChatState({ loading: true, error: "" });
+    try {
+      const data = await callApi("/regulatory/finalize", {
+        method: "POST",
+        body: JSON.stringify({ session_id: sessionId, accept: true }),
+      });
+      appendMessage(
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: "Gera o documento com os campos em falta sinalizados.",
+        },
+      );
+      appendMessage(
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: data.assistant_text,
+          regulatoryPayload: data,
+        },
+        {
+          regulatory: {
+            ...(activeConversation.regulatory || {}),
+            step: data.step,
+            pendingAction: data.pending_action,
+            filledFields: data.filled_fields || [],
+            flaggedFields: data.flagged_fields || [],
+            downloadUrl: data.download_url || null,
+            downloadName: data.download_name || null,
+          },
+        }
+      );
+      setChatState({ loading: false, error: "" });
+    } catch (error) {
+      setChatState({ loading: false, error: error.message || "Erro na finalização." });
+    }
+  }
+
   function handleDeleteConversation(event, conversationId) {
     event.stopPropagation();
     const confirmed = window.confirm("Queres mesmo apagar esta conversa?");
@@ -1541,6 +2201,11 @@ export default function App() {
   async function sendMessage(maybeText) {
     const question = (maybeText ?? input).trim();
     if (!question || !activeConversation || chatState.loading) return;
+
+    if (activeConversation.mode === "regulatory") {
+      await sendRegulatoryMessage(question);
+      return;
+    }
 
     setChatState({ loading: true, error: "" });
     const userMessage = { id: crypto.randomUUID(), role: "user", content: question };
@@ -1592,6 +2257,83 @@ export default function App() {
       setChatState({ loading: false, error: "" });
     } catch (error) {
       setChatState({ loading: false, error: error.message || "Erro no endpoint /chat." });
+    }
+  }
+
+  async function sendRegulatoryMessage(text) {
+    setChatState({ loading: true, error: "" });
+    const regulatory = activeConversation.regulatory || {};
+    const step = regulatory.step || "awaiting_description";
+
+    const userMessage = { id: crypto.randomUUID(), role: "user", content: text };
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === activeConversation.id
+          ? {
+              ...c,
+              title: c.messages.length === 0 ? formatConversationTitle(text) : c.title,
+              messages: [...c.messages, userMessage],
+              updatedAt: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+    setInput("");
+
+    try {
+      let data;
+      if (step === "awaiting_description") {
+        data = await callApi("/regulatory/start", {
+          method: "POST",
+          body: JSON.stringify({
+            description: text,
+            session_id: regulatory.sessionId || null,
+          }),
+        });
+      } else if (step === "collecting_info") {
+        data = await callApi("/regulatory/message", {
+          method: "POST",
+          body: JSON.stringify({
+            session_id: regulatory.sessionId,
+            message: text,
+          }),
+        });
+      } else {
+        throw new Error("Este passo não aceita mais mensagens livres. Usa os botões disponíveis.");
+      }
+
+      const assistantMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: data.assistant_text,
+        regulatoryPayload: data,
+      };
+
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === activeConversation.id
+            ? {
+                ...c,
+                messages: [...c.messages, assistantMessage],
+                regulatory: {
+                  ...(c.regulatory || {}),
+                  sessionId: data.session_id,
+                  step: data.step,
+                  pendingAction: data.pending_action,
+                  lastAnalysis: data.analysis || c.regulatory?.lastAnalysis || null,
+                  filledFields: data.filled_fields || c.regulatory?.filledFields || [],
+                  flaggedFields: data.flagged_fields || c.regulatory?.flaggedFields || [],
+                  downloadUrl: data.download_url || c.regulatory?.downloadUrl || null,
+                  downloadName: data.download_name || c.regulatory?.downloadName || null,
+                },
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+      setChatState({ loading: false, error: "" });
+    } catch (error) {
+      setChatState({ loading: false, error: error.message || "Erro no fluxo regulatório." });
     }
   }
 
@@ -1731,6 +2473,30 @@ export default function App() {
           {!sidebarCollapsed && "Nova conversa"}
         </button>
 
+        <button
+          onClick={handleNewRegulatoryConversation}
+          className="bmai-pressable"
+          title="Analisar dispositivo e preencher PMCF"
+          style={{
+            background: "rgba(239,233,212,0.08)",
+            color: "var(--paper)",
+            border: "1px solid rgba(239,233,212,0.18)",
+            borderRadius: 14,
+            padding: sidebarCollapsed ? "10px 0" : "10px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: sidebarCollapsed ? "center" : "flex-start",
+            gap: 10,
+            fontWeight: 500,
+            fontSize: 13,
+            cursor: "pointer",
+            fontFamily: "var(--body)",
+          }}
+        >
+          <Stethoscope size={15} />
+          {!sidebarCollapsed && "Analisar dispositivo"}
+        </button>
+
         {!sidebarCollapsed && (
           <>
             <div
@@ -1777,7 +2543,11 @@ export default function App() {
                       }`,
                     }}
                   >
-                    <MessageSquare size={14} style={{ flexShrink: 0, opacity: 0.8 }} />
+                    {c.mode === "regulatory" ? (
+                      <Stethoscope size={14} style={{ flexShrink: 0, opacity: 0.8 }} />
+                    ) : (
+                      <MessageSquare size={14} style={{ flexShrink: 0, opacity: 0.8 }} />
+                    )}
                     <span
                       style={{
                         flex: 1,
@@ -1990,8 +2760,15 @@ export default function App() {
           <HealthIndicator state={health.state} />
         </header>
 
-        {/* KPI bar */}
-        {currentMeta && messages.length > 0 && <KpiBar meta={currentMeta} />}
+        {/* KPI bar (apenas modo RAG) */}
+        {activeConversation?.mode !== "regulatory" && currentMeta && messages.length > 0 && (
+          <KpiBar meta={currentMeta} />
+        )}
+
+        {/* Step indicator (apenas modo regulatório) */}
+        {activeConversation?.mode === "regulatory" && (
+          <RegulatoryStepIndicator step={activeConversation.regulatory?.step || "awaiting_description"} />
+        )}
 
         {/* alerts */}
         {chatState.error && (
@@ -2064,7 +2841,14 @@ export default function App() {
               }}
             >
               {isEmpty ? (
-                <EmptyState onPick={(q) => sendMessage(q)} />
+                activeConversation?.mode === "regulatory" ? (
+                  <RegulatoryEmptyState
+                    customTemplateName={activeConversation.regulatory?.customTemplateName}
+                    onUploadTemplate={handleUploadTemplate}
+                  />
+                ) : (
+                  <EmptyState onPick={(q) => sendMessage(q)} />
+                )
               ) : (
                 <div
                   style={{
@@ -2097,6 +2881,23 @@ export default function App() {
               )}
             </div>
 
+            {/* regulatory action bar */}
+            {activeConversation?.mode === "regulatory" && activeConversation.regulatory?.pendingAction && (
+              <RegulatoryActionBar
+                pendingAction={activeConversation.regulatory.pendingAction}
+                loading={chatState.loading}
+                onConfirm={handleRegulatoryConfirm}
+                onFinalize={handleRegulatoryFinalize}
+                onDownload={() => {
+                  const url = `${normalizedBaseUrl}/regulatory/download/${activeConversation.regulatory.sessionId}`;
+                  window.open(url, "_blank");
+                }}
+                downloadName={activeConversation.regulatory.downloadName}
+                filledCount={(activeConversation.regulatory.filledFields || []).length}
+                flaggedCount={(activeConversation.regulatory.flaggedFields || []).length}
+              />
+            )}
+
             {/* input area */}
             <div
               style={{
@@ -2114,6 +2915,11 @@ export default function App() {
                 width: "100%",
                 alignSelf: "center",
                 boxSizing: "border-box",
+                opacity:
+                  activeConversation?.mode === "regulatory" &&
+                  activeConversation.regulatory?.step === "document_ready"
+                    ? 0.5
+                    : 1,
               }}
             >
               <textarea
@@ -2122,7 +2928,22 @@ export default function App() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                placeholder="Escreve a tua pergunta sobre MDR, AI Act, classificação..."
+                disabled={
+                  activeConversation?.mode === "regulatory" &&
+                  (activeConversation.regulatory?.step === "awaiting_fill_confirmation" ||
+                   activeConversation.regulatory?.step === "document_ready")
+                }
+                placeholder={
+                  activeConversation?.mode === "regulatory"
+                    ? (activeConversation.regulatory?.step === "awaiting_description"
+                        ? "Descreve o dispositivo: finalidade, utilizadores, modo de utilização, componente de IA..."
+                        : activeConversation.regulatory?.step === "collecting_info"
+                        ? "Responde às perguntas acima (podes responder só a algumas)..."
+                        : activeConversation.regulatory?.step === "awaiting_fill_confirmation"
+                        ? "Usa os botões acima para continuar."
+                        : "Documento pronto — descarrega acima.")
+                    : "Escreve a tua pergunta sobre MDR, AI Act, classificação..."
+                }
                 style={{
                   flex: 1,
                   border: "none",
@@ -2178,11 +2999,13 @@ export default function App() {
             </div>
           </section>
 
-          <DetailsPanel
-            meta={currentMeta}
-            collapsed={detailsCollapsed}
-            onToggle={() => setDetailsCollapsed((v) => !v)}
-          />
+          {activeConversation?.mode !== "regulatory" && (
+            <DetailsPanel
+              meta={currentMeta}
+              collapsed={detailsCollapsed}
+              onToggle={() => setDetailsCollapsed((v) => !v)}
+            />
+          )}
         </div>
       </main>
     </div>

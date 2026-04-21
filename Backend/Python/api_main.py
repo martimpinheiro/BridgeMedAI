@@ -23,13 +23,24 @@ A lógica de negócio associada à pesquisa e geração de respostas encontra-se
 isolada no módulo `api_rag_service`.
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, File, HTTPException, Path as FPath, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
 from api_rag_service import search_question, answer_question
+from api_regulatory_service import (
+    analyze_device,
+    collect_answers,
+    generate_document,
+    get_generated_path,
+    session_state,
+    set_custom_template,
+    skip_remaining_and_generate,
+    start_collection,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +66,13 @@ openapi_tags = [
         "description": (
             "Endpoints de geração assistida com RAG, combinando retrieval e "
             "resposta textual fundamentada."
+        ),
+    },
+    {
+        "name": "Regulatório",
+        "description": (
+            "Fluxo guiado em três passos: análise regulatória do dispositivo, "
+            "recolha de informação em falta e preenchimento do Plano PMCF em .docx."
         ),
     },
 ]
@@ -560,3 +578,263 @@ def chat_endpoint(payload: QuestionRequest) -> ChatResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro interno durante o processo de retrieval ou geração.",
         )
+
+
+# ---------------------------------------------------------------------------
+# Fluxo regulatório guiado (Step 1 / 2 / 3 do PMCF)
+# ---------------------------------------------------------------------------
+class RegulatoryStartRequest(BaseModel):
+    """
+    Pedido inicial do fluxo regulatório.
+
+    O utilizador fornece a descrição do dispositivo médico em texto livre.
+    A descrição pode incluir finalidade, utilizadores, modo de utilização,
+    invasividade, componente de IA, etc.
+    """
+    description: str = Field(
+        ...,
+        min_length=3,
+        description="Descrição do dispositivo médico em linguagem natural.",
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Identificador de sessão a reutilizar; se omisso, é criada nova sessão.",
+    )
+
+    @field_validator("description")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("A descrição não pode estar vazia.")
+        return cleaned
+
+
+class RegulatoryConfirmRequest(BaseModel):
+    session_id: str = Field(..., description="Identificador da sessão regulatória.")
+    accept: bool = Field(
+        ...,
+        description="Se True, arranca a recolha de informação; se False, encerra o fluxo.",
+    )
+
+
+class RegulatoryMessageRequest(BaseModel):
+    session_id: str = Field(..., description="Identificador da sessão regulatória.")
+    message: str = Field(..., min_length=1, description="Texto livre do utilizador.")
+
+
+class RegulatoryStepResponse(BaseModel):
+    """Resposta genérica de qualquer passo do fluxo regulatório."""
+    session_id: str
+    step: str = Field(..., description="Estado atual da máquina de fluxo.")
+    assistant_text: str = Field(..., description="Mensagem textual a apresentar ao utilizador.")
+    analysis: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Metadados estruturados da análise regulatória (Step 1).",
+    )
+    missing_groups: Optional[Dict[str, List[Dict[str, str]]]] = Field(
+        default=None,
+        description="Perguntas pendentes agrupadas logicamente (Step 2).",
+    )
+    still_missing: Optional[List[str]] = Field(
+        default=None,
+        description="Chaves ainda por responder após mapeamento.",
+    )
+    filled_fields: Optional[List[Dict[str, str]]] = Field(
+        default=None,
+        description="Campos preenchidos automaticamente no documento (Step 3).",
+    )
+    flagged_fields: Optional[List[Dict[str, str]]] = Field(
+        default=None,
+        description="Campos marcados como 'preencher manualmente' (Step 3).",
+    )
+    download_url: Optional[str] = Field(
+        default=None,
+        description="Caminho relativo para descarregar o documento final.",
+    )
+    download_name: Optional[str] = Field(
+        default=None,
+        description="Nome sugerido do ficheiro para download.",
+    )
+    pending_action: Optional[str] = Field(
+        default=None,
+        description="Ação seguinte esperada por parte do utilizador.",
+    )
+    collected_count: Optional[int] = None
+
+
+def _to_response(result: Dict[str, Any]) -> RegulatoryStepResponse:
+    return RegulatoryStepResponse(**result)
+
+
+@app.post(
+    "/regulatory/start",
+    response_model=RegulatoryStepResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Regulatório"],
+    summary="Step 1 — Análise regulatória do dispositivo",
+    description=(
+        "Recebe a descrição de um dispositivo médico e devolve a análise completa: "
+        "tipo de dispositivo, classificação MDR (Anexo VIII) com regra aplicável, "
+        "enquadramento no AI Act, obrigações MDR, normas harmonizadas relevantes e "
+        "separação entre obrigações pré-mercado e pós-mercado. Termina sempre a "
+        "perguntar se o utilizador pretende preencher o Plano PMCF."
+    ),
+    operation_id="post_regulatory_start",
+)
+def regulatory_start(payload: RegulatoryStartRequest) -> RegulatoryStepResponse:
+    try:
+        result = analyze_device(payload.session_id, payload.description)
+        return _to_response(result)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro na análise regulatória: {exc}",
+        )
+
+
+@app.post(
+    "/regulatory/confirm",
+    response_model=RegulatoryStepResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Regulatório"],
+    summary="Step 2 — Confirmação do preenchimento do PMCF",
+    description=(
+        "Após a análise, o utilizador decide se quer prosseguir com o preenchimento. "
+        "Se aceitar, o sistema carrega o template e devolve a lista de campos em falta."
+    ),
+    operation_id="post_regulatory_confirm",
+)
+def regulatory_confirm(payload: RegulatoryConfirmRequest) -> RegulatoryStepResponse:
+    try:
+        if not payload.accept:
+            return RegulatoryStepResponse(
+                session_id=payload.session_id,
+                step="closed",
+                assistant_text="Sem problema. Se precisares, posso retomar a análise noutra altura.",
+                pending_action=None,
+            )
+        result = start_collection(payload.session_id)
+        return _to_response(result)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao iniciar recolha: {exc}",
+        )
+
+
+@app.post(
+    "/regulatory/message",
+    response_model=RegulatoryStepResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Regulatório"],
+    summary="Step 2 — Envio de respostas do utilizador",
+    description=(
+        "Envia o texto livre com as respostas do utilizador. O sistema usa o LLM "
+        "para mapear as respostas às chaves em aberto. Pode requerer várias "
+        "iterações até todos os campos estarem preenchidos ou marcados."
+    ),
+    operation_id="post_regulatory_message",
+)
+def regulatory_message(payload: RegulatoryMessageRequest) -> RegulatoryStepResponse:
+    try:
+        result = collect_answers(payload.session_id, payload.message)
+        return _to_response(result)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao processar a mensagem: {exc}",
+        )
+
+
+@app.post(
+    "/regulatory/finalize",
+    response_model=RegulatoryStepResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Regulatório"],
+    summary="Step 3 — Gerar o documento PMCF final",
+    description=(
+        "Força o preenchimento do documento mesmo que ainda existam campos em aberto. "
+        "Os campos em falta são marcados com '⚠️ Preencher manualmente' no documento."
+    ),
+    operation_id="post_regulatory_finalize",
+)
+def regulatory_finalize(payload: RegulatoryConfirmRequest) -> RegulatoryStepResponse:
+    try:
+        result = skip_remaining_and_generate(payload.session_id)
+        return _to_response(result)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao gerar o documento: {exc}",
+        )
+
+
+@app.post(
+    "/regulatory/upload-template",
+    tags=["Regulatório"],
+    summary="Carregar um template PMCF personalizado",
+    description=(
+        "Permite ao utilizador enviar o seu próprio .docx de template. Se omitido, "
+        "é usado o template pré-carregado do projeto (Backend/templates/pmcf_template.docx)."
+    ),
+    operation_id="post_regulatory_upload_template",
+)
+async def regulatory_upload_template(
+    session_id: str, file: UploadFile = File(...)
+) -> Dict[str, Any]:
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Apenas ficheiros .docx são aceites.",
+        )
+    try:
+        content = await file.read()
+        return set_custom_template(session_id, content, file.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao carregar template: {exc}",
+        )
+
+
+@app.get(
+    "/regulatory/state/{session_id}",
+    tags=["Regulatório"],
+    summary="Obter estado atual de uma sessão regulatória",
+    operation_id="get_regulatory_state",
+)
+def regulatory_state(session_id: str) -> Dict[str, Any]:
+    try:
+        return session_state(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@app.get(
+    "/regulatory/download/{session_id}",
+    tags=["Regulatório"],
+    summary="Descarregar o Plano PMCF preenchido",
+    operation_id="get_regulatory_download",
+)
+def regulatory_download(session_id: str = FPath(..., description="Sessão regulatória.")):
+    try:
+        path = get_generated_path(session_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    return FileResponse(
+        path=str(path),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=path.name,
+    )
