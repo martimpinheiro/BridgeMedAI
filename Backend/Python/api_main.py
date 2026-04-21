@@ -25,10 +25,21 @@ isolada no módulo `api_rag_service`.
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, HTTPException, Path as FPath, UploadFile, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Path as FPath,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, field_validator
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from api_rag_service import search_question, answer_question
 from api_regulatory_service import (
@@ -40,6 +51,29 @@ from api_regulatory_service import (
     set_custom_template,
     skip_remaining_and_generate,
     start_collection,
+)
+from api_auth_service import (
+    AuthUser,
+    approve_specialist,
+    authenticate,
+    consume_admin_invite,
+    decode_token,
+    generate_admin_invite,
+    get_credential_file,
+    get_specialist_profile,
+    get_user_by_id,
+    latest_submission_round,
+    list_admin_invites,
+    list_credentials,
+    list_notifications,
+    list_specialist_queue,
+    list_users,
+    register_specialist,
+    register_user,
+    reject_specialist,
+    resubmit_specialist,
+    store_credential,
+    update_specialist_profile,
 )
 
 
@@ -73,6 +107,20 @@ openapi_tags = [
         "description": (
             "Fluxo guiado em três passos: análise regulatória do dispositivo, "
             "recolha de informação em falta e preenchimento do Plano PMCF em .docx."
+        ),
+    },
+    {
+        "name": "Autenticação",
+        "description": (
+            "Registo de users e especialistas, login, gestão do perfil do "
+            "especialista e resubmissão de credenciais após rejeição."
+        ),
+    },
+    {
+        "name": "Administração",
+        "description": (
+            "Operações restritas a administradores: fila de aprovação de "
+            "especialistas, gestão de convites e listagem global de utilizadores."
         ),
     },
 ]
@@ -399,6 +447,60 @@ class ChatResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Segurança — Bearer JWT + dependências de role
+# ---------------------------------------------------------------------------
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+) -> AuthUser:
+    """Extrai o utilizador autenticado do Bearer token. Lança 401 se inválido."""
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticação em falta.")
+    try:
+        payload = decode_token(credentials.credentials)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+
+    user_id = payload.get("sub")
+    user = get_user_by_id(user_id) if user_id else None
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilizador não existe.")
+    return user
+
+
+def require_active(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    """Qualquer role, mas apenas com status=active."""
+    if user.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Conta em estado '{user.status}'. Acesso restrito.",
+        )
+    return user
+
+
+def require_admin(user: AuthUser = Depends(require_active)) -> AuthUser:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administradores.")
+    return user
+
+
+def require_chatbot_access(user: AuthUser = Depends(require_active)) -> AuthUser:
+    """Acesso ao chatbot e fluxo regulatório — user ou specialist, com conta activa."""
+    if user.role not in ("user", "specialist"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito a users e especialistas.")
+    return user
+
+
+def require_specialist_self(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    """Endpoints de especialista (inclui pending/rejected para permitir resubmissão)."""
+    if user.role != "specialist":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas especialistas.")
+    return user
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 @app.get(
@@ -450,6 +552,7 @@ def health() -> HealthResponse:
 
 @app.post(
     "/search",
+    dependencies=[Depends(require_chatbot_access)],
     response_model=SearchResponse,
     response_model_exclude_none=True,
     status_code=status.HTTP_200_OK,
@@ -513,6 +616,7 @@ def search_endpoint(payload: QuestionRequest) -> SearchResponse:
 
 @app.post(
     "/chat",
+    dependencies=[Depends(require_chatbot_access)],
     response_model=ChatResponse,
     response_model_exclude_none=True,
     status_code=status.HTTP_200_OK,
@@ -669,6 +773,7 @@ def _to_response(result: Dict[str, Any]) -> RegulatoryStepResponse:
 
 @app.post(
     "/regulatory/start",
+    dependencies=[Depends(require_chatbot_access)],
     response_model=RegulatoryStepResponse,
     status_code=status.HTTP_200_OK,
     tags=["Regulatório"],
@@ -697,6 +802,7 @@ def regulatory_start(payload: RegulatoryStartRequest) -> RegulatoryStepResponse:
 
 @app.post(
     "/regulatory/confirm",
+    dependencies=[Depends(require_chatbot_access)],
     response_model=RegulatoryStepResponse,
     status_code=status.HTTP_200_OK,
     tags=["Regulatório"],
@@ -729,6 +835,7 @@ def regulatory_confirm(payload: RegulatoryConfirmRequest) -> RegulatoryStepRespo
 
 @app.post(
     "/regulatory/message",
+    dependencies=[Depends(require_chatbot_access)],
     response_model=RegulatoryStepResponse,
     status_code=status.HTTP_200_OK,
     tags=["Regulatório"],
@@ -755,6 +862,7 @@ def regulatory_message(payload: RegulatoryMessageRequest) -> RegulatoryStepRespo
 
 @app.post(
     "/regulatory/finalize",
+    dependencies=[Depends(require_chatbot_access)],
     response_model=RegulatoryStepResponse,
     status_code=status.HTTP_200_OK,
     tags=["Regulatório"],
@@ -780,6 +888,7 @@ def regulatory_finalize(payload: RegulatoryConfirmRequest) -> RegulatoryStepResp
 
 @app.post(
     "/regulatory/upload-template",
+    dependencies=[Depends(require_chatbot_access)],
     tags=["Regulatório"],
     summary="Carregar um template PMCF personalizado",
     description=(
@@ -810,6 +919,7 @@ async def regulatory_upload_template(
 
 @app.get(
     "/regulatory/state/{session_id}",
+    dependencies=[Depends(require_chatbot_access)],
     tags=["Regulatório"],
     summary="Obter estado atual de uma sessão regulatória",
     operation_id="get_regulatory_state",
@@ -823,6 +933,7 @@ def regulatory_state(session_id: str) -> Dict[str, Any]:
 
 @app.get(
     "/regulatory/download/{session_id}",
+    dependencies=[Depends(require_chatbot_access)],
     tags=["Regulatório"],
     summary="Descarregar o Plano PMCF preenchido",
     operation_id="get_regulatory_download",
@@ -838,3 +949,271 @@ def regulatory_download(session_id: str = FPath(..., description="Sessão regula
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=path.name,
     )
+
+
+# ===========================================================================
+# Autenticação
+# ===========================================================================
+class RegisterUserRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=2)
+
+
+class RegisterSpecialistRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=2)
+    specialty: str = Field(..., min_length=2)
+    institution: str = Field(..., min_length=2)
+    country: str = Field(..., min_length=2)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class InviteRegisterRequest(BaseModel):
+    token: str = Field(..., min_length=8)
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=2)
+
+
+class InviteCreateRequest(BaseModel):
+    note: Optional[str] = Field(None, max_length=255)
+
+
+class RejectSpecialistRequest(BaseModel):
+    reason: str = Field(..., min_length=3)
+
+
+class UpdateSpecialistProfileRequest(BaseModel):
+    specialty: Optional[str] = None
+    institution: Optional[str] = None
+    country: Optional[str] = None
+
+
+def _auth_payload(user: AuthUser, token: str, expires_at) -> Dict[str, Any]:
+    profile = get_specialist_profile(user.id) if user.role == "specialist" else None
+    return {
+        "token": token,
+        "expires_at": expires_at.isoformat(),
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "status": user.status,
+        },
+        "specialist_profile": profile,
+    }
+
+
+def _me_payload(user: AuthUser) -> Dict[str, Any]:
+    profile = get_specialist_profile(user.id) if user.role == "specialist" else None
+    notifications = list_notifications(user.id, limit=5)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "status": user.status,
+        "specialist_profile": profile,
+        "notifications": notifications,
+    }
+
+
+@app.post("/auth/register-user", tags=["Autenticação"], summary="Registo público de um utilizador normal.")
+def auth_register_user(payload: RegisterUserRequest) -> Dict[str, Any]:
+    try:
+        user = register_user(payload.email, payload.password, payload.full_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    # Emite token imediatamente (status=active)
+    _, token_str, exp = authenticate(payload.email, payload.password)
+    return _auth_payload(user, token_str, exp)
+
+
+@app.post("/auth/register-specialist", tags=["Autenticação"], summary="Registo de um especialista (fica pending).")
+async def auth_register_specialist(
+    email: EmailStr = Form(...),
+    password: str = Form(..., min_length=8),
+    full_name: str = Form(..., min_length=2),
+    specialty: str = Form(..., min_length=2),
+    institution: str = Form(..., min_length=2),
+    country: str = Form(..., min_length=2),
+    credentials: List[UploadFile] = File(..., description="Documentos comprovativos (.pdf, .jpg, .png)."),
+) -> Dict[str, Any]:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tem de carregar pelo menos um documento.")
+    try:
+        user = register_specialist(email, password, full_name, specialty, institution, country)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    for up in credentials:
+        try:
+            content = await up.read()
+            store_credential(user.id, up.filename or "credential", content, up.content_type or "application/octet-stream", 1)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{up.filename}: {exc}")
+    user = get_user_by_id(user.id) or user
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "status": user.status,
+        },
+        "message": "Conta criada em estado 'pending'. Um administrador vai rever as credenciais submetidas.",
+    }
+
+
+@app.post("/auth/login", tags=["Autenticação"], summary="Autenticação com email + password.")
+def auth_login(payload: LoginRequest) -> Dict[str, Any]:
+    try:
+        user, token, exp = authenticate(payload.email, payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+    return _auth_payload(user, token, exp)
+
+
+@app.post("/auth/invite-register", tags=["Autenticação"], summary="Registo de admin via convite único.")
+def auth_invite_register(payload: InviteRegisterRequest) -> Dict[str, Any]:
+    try:
+        user = consume_admin_invite(payload.token, payload.email, payload.password, payload.full_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    _, token, exp = authenticate(payload.email, payload.password)
+    return _auth_payload(user, token, exp)
+
+
+@app.get("/auth/me", tags=["Autenticação"], summary="Perfil do utilizador autenticado.")
+def auth_me(user: AuthUser = Depends(get_current_user)) -> Dict[str, Any]:
+    return _me_payload(user)
+
+
+@app.get("/auth/invite/{token}", tags=["Autenticação"], summary="Valida um convite sem o consumir.")
+def auth_check_invite(token: str) -> Dict[str, Any]:
+    import hashlib as _h
+    from datetime import datetime as _dt, timezone as _tz
+    th = _h.sha256(token.encode("utf-8")).hexdigest()
+    from api_db import db_cursor as _db
+    with _db() as cur:
+        cur.execute(
+            "SELECT expires_at, used_at, note FROM dbo.admin_invites WHERE token_hash = ?",
+            th,
+        )
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Convite inválido.")
+    expires_at, used_at, note = row
+    if used_at is not None:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Este convite já foi utilizado.")
+    if expires_at:
+        exp_cmp = expires_at.replace(tzinfo=_tz.utc) if expires_at.tzinfo is None else expires_at
+        if exp_cmp < _dt.now(_tz.utc):
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Este convite expirou.")
+    return {"valid": True, "expires_at": expires_at.isoformat() if expires_at else None, "note": note}
+
+
+# ---------------------------------------------------------------------------
+# Especialista (pending/rejected/approved)
+# ---------------------------------------------------------------------------
+@app.post(
+    "/specialist/resubmit",
+    tags=["Autenticação"],
+    summary="Especialista rejeitado/pending resubmete credenciais.",
+)
+async def specialist_resubmit(
+    specialty: Optional[str] = Form(None),
+    institution: Optional[str] = Form(None),
+    country: Optional[str] = Form(None),
+    credentials: List[UploadFile] = File(..., description="Nova(s) credencial(is)."),
+    user: AuthUser = Depends(require_specialist_self),
+) -> Dict[str, Any]:
+    if user.status == "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A conta já está ativa — não é necessária resubmissão.",
+        )
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tem de carregar pelo menos um ficheiro.")
+
+    update_specialist_profile(user.id, specialty=specialty, institution=institution, country=country)
+
+    new_round = latest_submission_round(user.id) + 1
+    for up in credentials:
+        try:
+            content = await up.read()
+            store_credential(user.id, up.filename or "credential", content, up.content_type or "application/octet-stream", new_round)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{up.filename}: {exc}")
+
+    resubmit_specialist(user.id)
+    refreshed = get_user_by_id(user.id) or user
+    return {"message": "Nova submissão recebida. A conta voltou ao estado 'pending'.",
+            "user": {"id": refreshed.id, "status": refreshed.status}}
+
+
+@app.get("/specialist/me/credentials", tags=["Autenticação"], summary="Lista credenciais do próprio especialista.")
+def specialist_my_credentials(user: AuthUser = Depends(require_specialist_self)) -> List[Dict[str, Any]]:
+    return list_credentials(user.id)
+
+
+# ---------------------------------------------------------------------------
+# Administração
+# ---------------------------------------------------------------------------
+@app.get("/admin/users", tags=["Administração"], summary="Lista todos os utilizadores.")
+def admin_users(
+    role: Optional[str] = Query(None, regex="^(user|specialist|admin)$"),
+    status_filter: Optional[str] = Query(None, alias="status", regex="^(active|pending|rejected)$"),
+    _: AuthUser = Depends(require_admin),
+) -> List[Dict[str, Any]]:
+    return list_users(role=role, status=status_filter)
+
+
+@app.get("/admin/specialist-queue", tags=["Administração"], summary="Fila de especialistas a aprovar.")
+def admin_specialist_queue(_: AuthUser = Depends(require_admin)) -> List[Dict[str, Any]]:
+    return list_specialist_queue()
+
+
+@app.post("/admin/specialists/{user_id}/approve", tags=["Administração"], summary="Aprovar especialista pendente.")
+def admin_approve_specialist(user_id: str, admin: AuthUser = Depends(require_admin)) -> Dict[str, Any]:
+    target = get_user_by_id(user_id)
+    if not target or target.role != "specialist":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Especialista não encontrado.")
+    approve_specialist(user_id, admin.id)
+    return {"message": "Especialista aprovado.", "user_id": user_id}
+
+
+@app.post("/admin/specialists/{user_id}/reject", tags=["Administração"], summary="Rejeitar especialista com motivo.")
+def admin_reject_specialist(user_id: str, payload: RejectSpecialistRequest, admin: AuthUser = Depends(require_admin)) -> Dict[str, Any]:
+    target = get_user_by_id(user_id)
+    if not target or target.role != "specialist":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Especialista não encontrado.")
+    try:
+        reject_specialist(user_id, admin.id, payload.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"message": "Especialista rejeitado.", "user_id": user_id, "reason": payload.reason}
+
+
+@app.get("/admin/credentials/{cred_id}/download", tags=["Administração"], summary="Descarregar ficheiro de credencial.")
+def admin_download_credential(cred_id: str, _: AuthUser = Depends(require_admin)):
+    info = get_credential_file(cred_id)
+    if not info:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credencial não encontrada.")
+    return FileResponse(path=info["file_path"], media_type=info["mime_type"], filename=info["original_filename"])
+
+
+@app.post("/admin/invites", tags=["Administração"], summary="Gerar novo convite de admin.")
+def admin_create_invite(payload: InviteCreateRequest, admin: AuthUser = Depends(require_admin)) -> Dict[str, Any]:
+    return generate_admin_invite(created_by=admin.id, note=payload.note)
+
+
+@app.get("/admin/invites", tags=["Administração"], summary="Listar convites de admin.")
+def admin_list_invites(_: AuthUser = Depends(require_admin)) -> List[Dict[str, Any]]:
+    return list_admin_invites()
