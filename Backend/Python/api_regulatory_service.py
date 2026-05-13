@@ -290,13 +290,23 @@ Tens de devolver APENAS um objeto JSON válido (sem markdown, sem comentários) 
 # Utilitários de LLM
 # ---------------------------------------------------------------------------
 def _chat(messages: List[Dict[str, str]], temperature: float = 0.2) -> str:
-    response = ollama.chat(
-        model=OLLAMA_REGULATORY_MODEL,
-        messages=messages,
-        options={"temperature": temperature},
-        stream=False,
-    )
-    return response["message"]["content"]
+    try:
+        response = ollama.chat(
+            model=OLLAMA_REGULATORY_MODEL,
+            messages=messages,
+            options={
+                "temperature": temperature,
+                "num_ctx": 4096,
+                "num_predict": 1200,
+            },
+            keep_alive="10m",
+            stream=False,
+        )
+        return response["message"]["content"]
+    except Exception as exc:
+        raise RuntimeError(
+            f"Falha ao executar o modelo regulatório '{OLLAMA_REGULATORY_MODEL}': {exc}"
+        ) from exc
 
 
 def _extract_json(text: str) -> Dict[str, Any]:

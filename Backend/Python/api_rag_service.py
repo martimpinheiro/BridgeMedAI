@@ -23,16 +23,13 @@ componentes centrais do backend.
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import ollama
 from dotenv import load_dotenv
 
-from rag_router_utils import (
-    validate_embeddings_payload,
-    retrieve_relevant_indices,
-    build_context,
-)
+from rag_router_utils import build_context
+from rag_retrieval_service import retrieve_sources
 
 
 # ---------------------------------------------------------------------------
@@ -555,11 +552,52 @@ def build_fixed_regulations_section(plan: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_history_block(history: Optional[List[Dict[str, str]]], max_items: int = 8) -> str:
+    """
+    Constrói um bloco textual com o histórico recente da conversa.
+    """
+    if not history:
+        return ""
+
+    lines = []
+    for msg in history[-max_items:]:
+        role = (msg.get("role") or "").strip().lower()
+        content = (msg.get("content") or "").strip()
+
+        if not role or not content:
+            continue
+
+        if role == "user":
+            lines.append(f"Utilizador: {content}")
+        elif role == "assistant":
+            lines.append(f"Assistente: {content}")
+
+    return "\n".join(lines).strip()
+
+
+def build_contextual_question(
+    question: str,
+    history: Optional[List[Dict[str, str]]] = None,
+) -> str:
+    """
+    Enriquece a pergunta atual com histórico recente quando existir.
+    """
+    history_block = build_history_block(history, max_items=6)
+
+    if not history_block:
+        return question
+
+    return (
+        f"Histórico recente da conversa:\n{history_block}\n\n"
+        f"Pergunta atual do utilizador:\n{question}"
+    )
+
 def build_user_prompt(
     user_question: str,
     context: str,
     intent: str,
     plan: Dict[str, Any],
+    history: Optional[List[Dict[str, str]]] = None,
 ) -> str:
     """
     Constrói o prompt de utilizador enviado ao modelo de chat.
@@ -590,6 +628,7 @@ def build_user_prompt(
     target_docs = plan.get("target_docs", [])
     target_docs_text = ", ".join(target_docs) if target_docs else "sem documento-alvo fixo"
     regulations_block = build_regulations_block(target_docs)
+    history_block = build_history_block(history)
 
     intent_specific_instruction = {
         "regulatory_scope": """
@@ -631,7 +670,10 @@ Documentos-alvo:
 Regulamentos principais já identificados externamente:
 {regulations_block}
 
-Pergunta do utilizador:
+Histórico recente da conversa:
+{history_block if history_block else "Sem histórico relevante."}
+
+Pergunta atual do utilizador:
 {user_question}
 
 Contexto recuperado:
@@ -810,42 +852,13 @@ def build_low_confidence_answer(
 def search_question(question: str) -> Dict[str, Any]:
     """
     Executa apenas a fase de pesquisa semântica.
-
-    Este método:
-    - valida se o modelo de embeddings está configurado;
-    - carrega o ficheiro de embeddings locais;
-    - corre o pipeline de retrieval;
-    - devolve intenção, documentos-alvo e fontes recuperadas.
-
-    Não executa geração de resposta via LLM.
-
-    Args:
-        question:
-            Pergunta do utilizador em linguagem natural.
-
-    Returns:
-        Dict[str, Any]:
-            Estrutura resumida com resultados da pesquisa.
-
-    Raises:
-        ValueError:
-            Se faltar configuração essencial no `.env`.
-        FileNotFoundError:
-            Se o ficheiro de embeddings não existir.
     """
-    if not OLLAMA_EMBED_MODEL:
-        raise ValueError("Falta OLLAMA_EMBED_MODEL no .env")
+    retrieval = retrieve_sources(question=question)
 
-    payload = validate_embeddings_payload(str(EMBEDDINGS_PATH))
-    records = payload["records"]
-    embeddings = payload["embeddings"]
-
-    selected_indices, base_scores, adjusted_scores, plan = retrieve_relevant_indices(
-        question=question,
-        records=records,
-        embeddings=embeddings,
-        embed_model=OLLAMA_EMBED_MODEL,
-    )
+    records = retrieval["records"]
+    selected_indices = retrieval["selected_indices"]
+    adjusted_scores = retrieval["adjusted_scores"]
+    plan = retrieval["plan"]
 
     return {
         "intent": plan["intent"],
@@ -854,52 +867,60 @@ def search_question(question: str) -> Dict[str, Any]:
     }
 
 
-def answer_question(question: str) -> Dict[str, Any]:
+def answer_question(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """
     Executa o fluxo completo de retrieval + geração de resposta.
 
     Pipeline:
     1. valida configuração necessária;
-    2. carrega embeddings locais;
-    3. corre retrieval para identificar fontes relevantes;
-    4. seleciona fontes para geração;
-    5. decide entre:
+    2. corre retrieval para identificar fontes relevantes;
+    3. seleciona fontes para geração;
+    4. decide entre:
        - fallback conservador, se a confiança for baixa;
        - geração normal via Ollama, se a confiança for suficiente;
-    6. devolve a resposta final e os metadados úteis para a API.
-
-    Args:
-        question:
-            Pergunta do utilizador.
-
-    Returns:
-        Dict[str, Any]:
-            Estrutura completa com intenção, documentos-alvo, fontes recuperadas,
-            fontes de geração e resposta final.
-
-    Raises:
-        ValueError:
-            Se faltar configuração essencial ou se não for possível recuperar/
-            selecionar contexto suficiente.
-        FileNotFoundError:
-            Se o ficheiro de embeddings não estiver disponível.
+    5. devolve a resposta final e os metadados úteis para a API.
     """
-    if not OLLAMA_EMBED_MODEL:
-        raise ValueError("Falta OLLAMA_EMBED_MODEL no .env")
-
     if not OLLAMA_CHAT_MODEL:
         raise ValueError("Falta OLLAMA_CHAT_MODEL no .env")
 
-    payload = validate_embeddings_payload(str(EMBEDDINGS_PATH))
-    records = payload["records"]
-    embeddings = payload["embeddings"]
+    question_clean = (question or "").strip()
 
-    selected_indices, base_scores, adjusted_scores, plan = retrieve_relevant_indices(
-        question=question,
-        records=records,
-        embeddings=embeddings,
-        embed_model=OLLAMA_EMBED_MODEL,
+    is_follow_up = (
+        len(question_clean) < 120
+        or any(
+            expr in question_clean.lower()
+            for expr in [
+                "e agora",
+                "agora",
+                "isso",
+                "esse",
+                "essa",
+                "este",
+                "esta",
+                "o mesmo",
+                "faz o documento",
+                "gera o pmcf",
+                "faz agora o documento pmcf",
+            ]
+        )
     )
+
+    retrieval_question = (
+        build_contextual_question(question_clean, history)
+        if is_follow_up
+        else question_clean
+    )
+
+    retrieval = retrieve_sources(
+        question=retrieval_question,
+        history=history,
+    )
+
+    records = retrieval["records"]
+    selected_indices = retrieval["selected_indices"]
+    base_scores = retrieval["base_scores"]
+    adjusted_scores = retrieval["adjusted_scores"]
+    plan = retrieval["plan"]
 
     if not selected_indices:
         raise ValueError("Não foi possível recuperar contexto relevante.")
@@ -914,8 +935,6 @@ def answer_question(question: str) -> Dict[str, Any]:
     if not generation_indices:
         raise ValueError("Não foi possível selecionar fontes para gerar a resposta.")
 
-    # Se a recuperação não tiver confiança mínima, devolve uma resposta mais
-    # prudente em vez de arriscar uma geração fraca.
     if not has_minimum_retrieval_confidence(selected_indices, adjusted_scores):
         final_answer = build_low_confidence_answer(
             plan,
@@ -931,10 +950,15 @@ def answer_question(question: str) -> Dict[str, Any]:
             "answer": final_answer,
         }
 
-    # Constrói o contexto final a partir das fontes escolhidas e gera a resposta.
     context = build_context(generation_indices, records)
     system_prompt = get_system_prompt(plan["intent"])
-    prompt = build_user_prompt(question, context, plan["intent"], plan)
+    prompt = build_user_prompt(
+        question,
+        context,
+        plan["intent"],
+        plan,
+        history=history,
+    )
 
     response = ollama.chat(
         model=OLLAMA_CHAT_MODEL,
@@ -945,7 +969,6 @@ def answer_question(question: str) -> Dict[str, Any]:
         stream=False,
     )
 
-    # Gera sempre a secção 1 fora do modelo, para garantir consistência.
     fixed_regulations_section = build_fixed_regulations_section(plan)
     generated_text = sanitize_generated_answer(response["message"]["content"])
     final_answer = f"{fixed_regulations_section}\n\n{generated_text}".strip()

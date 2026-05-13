@@ -77,6 +77,15 @@ from api_auth_service import (
 )
 
 
+from api_traceability_service import (
+    init_traceability_schema,
+    list_traceability_entries,
+    log_chat_trace,
+    log_regulatory_analysis_trace,
+    log_regulatory_document_trace,
+    update_traceability_review,
+)
+
 # ---------------------------------------------------------------------------
 # Metadados OpenAPI por tags
 # ---------------------------------------------------------------------------
@@ -123,6 +132,14 @@ openapi_tags = [
             "especialistas, gestão de convites e listagem global de utilizadores."
         ),
     },
+    
+    {
+        "name": "Rastreabilidade",
+        "description": (
+            "Endpoints da matriz de rastreabilidade para registo e revisão "
+            "das interações do chatbot."
+        ),
+    },
 ]
 
 
@@ -153,6 +170,14 @@ app = FastAPI(
     },
     openapi_tags=openapi_tags,
 )
+
+
+@app.on_event("startup")
+def startup_init() -> None:
+    try:
+        init_traceability_schema()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -229,11 +254,29 @@ class HealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Modelos Pydantic de pedidos e respostas
 # ---------------------------------------------------------------------------
-class QuestionRequest(BaseModel):
-    """
-    Modelo de pedido usado pelos endpoints que recebem uma pergunta textual.
-    """
 
+class ConversationMessage(BaseModel):
+    role: str = Field(..., description="Role da mensagem: user ou assistant.")
+    content: str = Field(..., min_length=1, description="Conteúdo textual da mensagem.")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if cleaned not in {"user", "assistant"}:
+            raise ValueError("Role inválida. Use 'user' ou 'assistant'.")
+        return cleaned
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("O conteúdo da mensagem não pode estar vazio.")
+        return cleaned
+
+
+class QuestionRequest(BaseModel):
     question: str = Field(
         ...,
         min_length=1,
@@ -242,31 +285,31 @@ class QuestionRequest(BaseModel):
             "Será analisada para identificar a intenção, os documentos-alvo "
             "e as fontes normativas potencialmente relevantes."
         ),
+        
         examples=[
             "Que regulamentos preciso de cumprir para um dispositivo médico com IA?",
             "Como classificar um termómetro não invasivo segundo o MDR?",
             "Que documentação técnica é exigida pelo MDR?",
         ],
     )
+    
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="Identificador da conversa no frontend para rastreabilidade.",
+    )
+    
+    history: Optional[List[Dict[str, str]]] = Field(
+        default=None,
+        description="Últimas mensagens da conversa.",
+    )
 
     @field_validator("question")
     @classmethod
     def validate_question(cls, value: str) -> str:
-        """
-        Remove espaços redundantes e impede perguntas vazias após trim.
-        """
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("A pergunta não pode estar vazia.")
         return cleaned
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "question": "Que regulamentos preciso de cumprir para um dispositivo médico com IA?"
-            }
-        }
-    }
 
 
 class SourceItem(BaseModel):
@@ -500,6 +543,80 @@ def require_specialist_self(user: AuthUser = Depends(get_current_user)) -> AuthU
     return user
 
 
+def _is_pmcf_generation_command(text: Optional[str]) -> bool:
+    if not text:
+        return False
+
+    t = text.strip().lower()
+    commands = [
+        "faz agora o documento pmcf",
+        "faz o documento pmcf",
+        "gera o documento pmcf",
+        "gera o pmcf",
+        "cria o documento pmcf",
+        "preenche o pmcf",
+        "faz agora o pmcf",
+    ]
+    return any(cmd in t for cmd in commands)
+
+
+def _looks_like_device_description(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+
+    if "?" in t:
+        return False
+
+    device_signals = [
+        "dispositivo médico",
+        "software médico",
+        "algoritmo de ia",
+        "sensor de",
+        "utilização em contexto clínico",
+        "profissionais de saúde",
+        "finalidade prevista",
+        "termómetro",
+        "pacemaker",
+        "ressonância magnética",
+        "monitorização",
+        "diagnóstico",
+        "classe i",
+        "classe iia",
+        "classe iib",
+        "classe iii",
+    ]
+
+    hits = sum(1 for s in device_signals if s in t)
+    return len(t) >= 80 and hits >= 2
+
+
+def _resolve_regulatory_description(
+    description: str,
+    history: Optional[List[ConversationMessage]],
+) -> str:
+    cleaned = (description or "").strip()
+
+    if cleaned and not _is_pmcf_generation_command(cleaned):
+        return cleaned
+
+    if history:
+        for msg in reversed(history):
+            if msg.role != "user":
+                continue
+
+            content = (msg.content or "").strip()
+            if not content:
+                continue
+
+            if _is_pmcf_generation_command(content):
+                continue
+
+            if _looks_like_device_description(content):
+                return content
+
+    return cleaned
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -604,7 +721,10 @@ def search_endpoint(payload: QuestionRequest) -> SearchResponse:
     comportamento do motor de retrieval.
     """
     try:
-        return search_question(payload.question)
+        return search_question(
+            payload.question,
+            history=payload.history or [],
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
@@ -665,16 +785,32 @@ def search_endpoint(payload: QuestionRequest) -> SearchResponse:
     },
     operation_id="post_chat_answer",
 )
-def chat_endpoint(payload: QuestionRequest) -> ChatResponse:
-    """
-    Executa o fluxo completo de pergunta-resposta do BridgeMedAI.
 
-    Este é o endpoint principal da aplicação para interação conversacional.
-    A pergunta recebida é processada pela camada de serviço, que trata da
-    recuperação de contexto normativo e da geração da resposta final.
-    """
+def chat_endpoint(
+    payload: QuestionRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> ChatResponse:
     try:
-        return answer_question(payload.question)
+        result = answer_question(
+            payload.question,
+            history=payload.history or [],
+        )
+
+        try:
+            log_chat_trace(
+                user_id=user.id,
+                conversation_id=payload.conversation_id,
+                question=payload.question,
+                answer=result.get("answer", ""),
+                intent=result.get("intent"),
+                target_docs=result.get("target_docs", []),
+                retrieved_sources=result.get("retrieved_sources", []),
+                generation_sources=result.get("generation_sources", []),
+            )
+        except Exception:
+            pass
+
+        return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
@@ -688,13 +824,6 @@ def chat_endpoint(payload: QuestionRequest) -> ChatResponse:
 # Fluxo regulatório guiado (Step 1 / 2 / 3 do PMCF)
 # ---------------------------------------------------------------------------
 class RegulatoryStartRequest(BaseModel):
-    """
-    Pedido inicial do fluxo regulatório.
-
-    O utilizador fornece a descrição do dispositivo médico em texto livre.
-    A descrição pode incluir finalidade, utilizadores, modo de utilização,
-    invasividade, componente de IA, etc.
-    """
     description: str = Field(
         ...,
         min_length=3,
@@ -703,6 +832,15 @@ class RegulatoryStartRequest(BaseModel):
     session_id: Optional[str] = Field(
         default=None,
         description="Identificador de sessão a reutilizar; se omisso, é criada nova sessão.",
+    )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="Identificador da conversa no frontend para rastreabilidade.",
+    )
+    
+    history: Optional[List[ConversationMessage]] = Field(
+        default=None,
+        description="Histórico recente da conversa para resolver referências contextuais.",
     )
 
     @field_validator("description")
@@ -720,11 +858,19 @@ class RegulatoryConfirmRequest(BaseModel):
         ...,
         description="Se True, arranca a recolha de informação; se False, encerra o fluxo.",
     )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="Identificador da conversa no frontend para rastreabilidade.",
+    )
 
 
 class RegulatoryMessageRequest(BaseModel):
     session_id: str = Field(..., description="Identificador da sessão regulatória.")
     message: str = Field(..., min_length=1, description="Texto livre do utilizador.")
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="Identificador da conversa no frontend para rastreabilidade.",
+    )
 
 
 class RegulatoryStepResponse(BaseModel):
@@ -765,6 +911,37 @@ class RegulatoryStepResponse(BaseModel):
         description="Ação seguinte esperada por parte do utilizador.",
     )
     collected_count: Optional[int] = None
+    
+    
+class TraceabilityEntry(BaseModel):
+    id: str
+    user_id: str
+    conversation_id: Optional[str] = None
+    trace_type: str
+    question: Optional[str] = None
+    answer: Optional[str] = None
+    intent: Optional[str] = None
+
+    target_docs: Any = Field(default_factory=list)
+    retrieved_sources: Any = Field(default_factory=list)
+    generation_sources: Any = Field(default_factory=list)
+
+    regulatory_session_id: Optional[str] = None
+    regulatory_step: Optional[str] = None
+    download_name: Optional[str] = None
+    result: Optional[str] = None
+    error_type: Optional[str] = None
+    severity: Optional[str] = None
+    reviewer_notes: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class TraceabilityReviewRequest(BaseModel):
+    result: Optional[str] = Field(default=None, pattern="^(OK|PARCIAL|NOK)?$")
+    error_type: Optional[str] = Field(default=None, pattern="^(E1|E2|E3|E4|E5|E6|E7)?$")
+    severity: Optional[str] = Field(default=None, pattern="^(baixa|média|alta)?$")
+    reviewer_notes: Optional[str] = None
 
 
 def _to_response(result: Dict[str, Any]) -> RegulatoryStepResponse:
@@ -787,18 +964,41 @@ def _to_response(result: Dict[str, Any]) -> RegulatoryStepResponse:
     ),
     operation_id="post_regulatory_start",
 )
-def regulatory_start(payload: RegulatoryStartRequest) -> RegulatoryStepResponse:
+
+def regulatory_start(
+    payload: RegulatoryStartRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> RegulatoryStepResponse:
     try:
-        result = analyze_device(payload.session_id, payload.description)
+        resolved_description = _resolve_regulatory_description(
+            payload.description,
+            payload.history,
+        )
+
+        result = analyze_device(payload.session_id, resolved_description)
+
+        try:
+            log_regulatory_analysis_trace(
+            user_id=user.id,
+            conversation_id=payload.conversation_id,
+            question=resolved_description,
+            assistant_text=result.get("assistant_text", ""),
+            session_id=result.get("session_id", payload.session_id or ""),
+            step=result.get("step", ""),
+            analysis=result.get("analysis"),
+            target_docs=["MDR", "AI_ACT"],
+        )
+        except Exception:
+            pass
+
         return _to_response(result)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro na análise regulatória: {exc}",
         )
-
 
 @app.post(
     "/regulatory/confirm",
@@ -873,13 +1073,32 @@ def regulatory_message(payload: RegulatoryMessageRequest) -> RegulatoryStepRespo
     ),
     operation_id="post_regulatory_finalize",
 )
-def regulatory_finalize(payload: RegulatoryConfirmRequest) -> RegulatoryStepResponse:
+
+def regulatory_finalize(
+    payload: RegulatoryConfirmRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> RegulatoryStepResponse:
     try:
         result = skip_remaining_and_generate(payload.session_id)
+
+        try:
+            log_regulatory_document_trace(
+                user_id=user.id,
+                conversation_id=payload.conversation_id,
+                session_id=result.get("session_id", payload.session_id),
+                step=result.get("step", ""),
+                assistant_text=result.get("assistant_text", ""),
+                download_name=result.get("download_name"),
+                filled_fields=result.get("filled_fields", []),
+                flagged_fields=result.get("flagged_fields", []),
+            )
+        except Exception:
+            pass
+
         return _to_response(result)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao gerar o documento: {exc}",
@@ -949,6 +1168,65 @@ def regulatory_download(session_id: str = FPath(..., description="Sessão regula
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=path.name,
     )
+
+
+@app.get(
+    "/traceability",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=List[TraceabilityEntry],
+    tags=["Rastreabilidade"],
+    summary="Listar matriz de rastreabilidade do utilizador",
+)
+
+def traceability_list(
+    limit: int = Query(100, ge=1, le=500),
+    conversation_id: Optional[str] = Query(
+        default=None,
+        description="Filtra a matriz por conversa específica.",
+    ),
+    user: AuthUser = Depends(require_chatbot_access),
+) -> List[TraceabilityEntry]:
+    try:
+        return list_traceability_entries(
+            user_id=user.id,
+            limit=limit,
+            conversation_id=conversation_id,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao listar matriz: {exc}",
+        )
+
+
+@app.patch(
+    "/traceability/{trace_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=TraceabilityEntry,
+    tags=["Rastreabilidade"],
+    summary="Atualizar revisão de uma entrada da matriz",
+)
+def traceability_update(
+    trace_id: str,
+    payload: TraceabilityReviewRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> TraceabilityEntry:
+    try:
+        return update_traceability_review(
+            trace_id=trace_id,
+            user_id=user.id,
+            result=payload.result,
+            error_type=payload.error_type,
+            severity=payload.severity,
+            reviewer_notes=payload.reviewer_notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao atualizar matriz: {exc}",
+        )
 
 
 # ===========================================================================
@@ -1168,8 +1446,8 @@ def specialist_my_credentials(user: AuthUser = Depends(require_specialist_self))
 # ---------------------------------------------------------------------------
 @app.get("/admin/users", tags=["Administração"], summary="Lista todos os utilizadores.")
 def admin_users(
-    role: Optional[str] = Query(None, regex="^(user|specialist|admin)$"),
-    status_filter: Optional[str] = Query(None, alias="status", regex="^(active|pending|rejected)$"),
+    role: Optional[str] = Query(None, pattern="^(user|specialist|admin)$"),
+    status_filter: Optional[str] = Query(None, alias="status", pattern="^(active|pending|rejected)$"),
     _: AuthUser = Depends(require_admin),
 ) -> List[Dict[str, Any]]:
     return list_users(role=role, status=status_filter)

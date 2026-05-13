@@ -11,6 +11,9 @@ import {
   Download,
   ClipboardCheck,
   CheckCircle2,
+  Table2,
+  Save,
+  XCircle,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useNavigate, Link } from "react-router-dom";
@@ -163,33 +166,137 @@ const SUGGESTIONS = [
     title: "Procedimento",
     q: "Quais são os passos do procedimento de avaliação da conformidade?",
   },
+  {
+    icon: FileText,
+    title: "PMCF",
+    q: "Termómetro digital de testa com sensor de infravermelhos e algoritmo de IA que estima a temperatura central a partir da leitura periférica, para utilização em contexto clínico por profissionais de saúde.",
+  },
 ];
 
 /* ---------- helpers ---------- */
-function createConversation(title = "Nova conversa", mode = "rag") {
+function createConversation(title = "Nova conversa") {
   return {
     id: crypto.randomUUID(),
     title,
-    mode, // "rag" | "regulatory"
     messages: [],
     meta: null,
-    regulatory: mode === "regulatory"
-      ? {
-          sessionId: null,
-          step: "awaiting_description",
-          pendingAction: null,
-          lastAnalysis: null,
-          filledFields: [],
-          flaggedFields: [],
-          downloadUrl: null,
-          downloadName: null,
-          customTemplateName: null,
-        }
-      : null,
+    regulatory: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 }
+
+function hasActiveRegulatoryFlow(conversation) {
+  if (!conversation?.regulatory) return false;
+  const step = conversation.regulatory.step;
+  return (
+    step === "awaiting_description" ||
+    step === "awaiting_fill_confirmation" ||
+    step === "collecting_info" ||
+    step === "document_ready"
+  );
+}
+
+function shouldStartRegulatoryFlow(text) {
+  const raw = (text || "").trim();
+  const t = raw.toLowerCase();
+
+  if (!t) return false;
+
+  // Comandos explícitos PMCF devem ir para o fluxo regulatório
+  if (isPmcfGenerationCommand(t)) return true;
+
+  // Perguntas normais devem ficar no chat RAG
+  const questionStarters = [
+    "que ",
+    "quais ",
+    "qual ",
+    "como ",
+    "quando ",
+    "onde ",
+    "porque ",
+    "porquê ",
+    "pode ",
+    "posso ",
+    "devo ",
+    "é ",
+    "o que ",
+  ];
+
+  const looksLikeQuestion =
+    raw.includes("?") || questionStarters.some((prefix) => t.startsWith(prefix));
+
+  if (looksLikeQuestion) return false;
+
+  // Sinais de que o utilizador está a descrever um dispositivo
+  const deviceSignals = [
+    "dispositivo médico",
+    "software médico",
+    "algoritmo de ia",
+    "sensor de",
+    "utilização em contexto clínico",
+    "profissionais de saúde",
+    "finalidade prevista",
+    "termómetro",
+    "pacemaker",
+    "ressonância magnética",
+    "monitorização",
+    "diagnóstico",
+    "classe i",
+    "classe iia",
+    "classe iib",
+    "classe iii",
+  ];
+
+  const hits = deviceSignals.filter((s) => t.includes(s)).length;
+
+  // Descrição longa + vários sinais clínicos/regulatórios
+  if (raw.length >= 80 && hits >= 2) return true;
+
+  return false;
+}
+
+
+function isPmcfGenerationCommand(text) {
+    const t = (text || "").trim().toLowerCase();
+    if (!t) return false;
+
+    return [
+      "faz agora o documento pmcf",
+      "faz o documento pmcf",
+      "gera o documento pmcf",
+      "gera o pmcf",
+      "cria o documento pmcf",
+      "preenche o pmcf",
+      "faz agora o pmcf",
+    ].some((expr) => t.includes(expr));
+  }
+
+  function buildConversationHistory(messages, limit = 8) {
+    return (messages || [])
+      .slice(-limit)
+      .map((m) => ({
+        role: m.role,
+        content: m.content,
+      }))
+      .filter((m) => m.role && m.content);
+  }
+
+  function findLastUsefulDeviceDescription(messages) {
+    const reversed = [...(messages || [])].reverse();
+
+    for (const msg of reversed) {
+      if (msg.role !== "user") continue;
+
+      const text = (msg.content || "").trim();
+      if (!text) continue;
+      if (isPmcfGenerationCommand(text)) continue;
+
+      return text;
+    }
+
+    return null;
+  }
 
 const REGULATORY_STEPS = [
   { key: "awaiting_description", short: "Análise", long: "1. Análise do dispositivo" },
@@ -333,6 +440,37 @@ function docLabel(code) {
 
 function intentLabel(intent) {
   return INTENT_LABELS[intent] || intent || "Pergunta livre";
+}
+
+
+function traceTypeLabel(type) {
+  if (type === "chat") return "Chat";
+  if (type === "regulatory_analysis") return "Análise regulatória";
+  if (type === "regulatory_document") return "Documento PMCF";
+  return type || "—";
+}
+
+function resultTone(result) {
+  if (result === "OK") return "check";
+  if (result === "PARCIAL") return "pending";
+  if (result === "NOK") return "missing";
+  return "neutral";
+}
+
+function severityTone(severity) {
+  if (severity === "alta") return "missing";
+  if (severity === "média") return "pending";
+  if (severity === "baixa") return "check";
+  return "neutral";
+}
+
+function shortDate(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString("pt-PT");
+  } catch {
+    return value;
+  }
 }
 
 /* ---------- atoms ---------- */
@@ -1092,7 +1230,6 @@ function EmptyState({ onPick }) {
     <div
       className="bmai-fade-in"
       style={{
-        /* fill the scroll area but can grow taller */
         minHeight: "100%",
         display: "flex",
         flexDirection: "column",
@@ -1124,7 +1261,6 @@ function EmptyState({ onPick }) {
 
       <h1
         style={{
-          /* smaller clamp so it never overflows on typical 1280-1440 laptops */
           fontSize: "clamp(28px, 3.8vw, 52px)",
           fontWeight: 300,
           lineHeight: 1.05,
@@ -1152,13 +1288,13 @@ function EmptyState({ onPick }) {
           fontSize: 14.5,
           lineHeight: 1.6,
           color: "var(--ink-muted)",
-          maxWidth: 520,
+          maxWidth: 620,
           marginBottom: 24,
         }}
       >
-        Coloca uma pergunta sobre MDR, AI Act, classificação de risco, documentação
-        técnica ou procedimentos de conformidade. A resposta vem sempre fundamentada
-        com as fontes normativas consultadas.
+        Faz uma pergunta sobre MDR, AI Act, classificação de risco, documentação técnica ou
+        procedimentos de conformidade. Também podes descrever diretamente um dispositivo médico
+        e o sistema entra no fluxo guiado de análise regulatória e preenchimento do PMCF.
       </p>
 
       <div
@@ -1226,7 +1362,7 @@ function EmptyState({ onPick }) {
 }
 
 /* ---------- details panel ---------- */
-function DetailsPanel({ meta, collapsed, onToggle }) {
+function DetailsPanel({ meta, collapsed, onToggle, onOpenTraceability, traceabilityActive, }) {
   if (collapsed) {
     return (
       <aside
@@ -1293,38 +1429,69 @@ function DetailsPanel({ meta, collapsed, onToggle }) {
       className="bmai-noise"
     >
       <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    marginBottom: 16,
+  }}
+>
+  <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <h3
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
+          fontFamily: "var(--display)",
+          fontSize: 18,
+          margin: 0,
+          color: "var(--ink)",
         }}
       >
-        <h3
-          style={{
-            fontFamily: "var(--display)",
-            fontSize: 18,
-            margin: 0,
-            color: "var(--ink)",
-          }}
-        >
-          Detalhes da resposta
-        </h3>
-        <button
-          onClick={onToggle}
-          title="Recolher"
-          className="bmai-pressable"
-          style={{
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            color: "var(--ink-faded)",
-            padding: 4,
-          }}
-        >
-          <ChevronDown size={16} style={{ transform: "rotate(-90deg)" }} />
-        </button>
-      </div>
+        Detalhes da resposta
+      </h3>
+      <button
+        onClick={onToggle}
+        title="Recolher"
+        className="bmai-pressable"
+        style={{
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          color: "var(--ink-faded)",
+          padding: 4,
+        }}
+      >
+        <ChevronDown size={16} style={{ transform: "rotate(-90deg)" }} />
+      </button>
+    </div>
+
+    <button
+      onClick={onOpenTraceability}
+      className="bmai-pressable"
+      style={{
+        width: "100%",
+        border: "1px solid var(--cream-edge)",
+        background: traceabilityActive ? "var(--forest)" : "var(--cream)",
+        color: traceabilityActive ? "var(--paper)" : "var(--forest)",
+        padding: "10px 12px",
+        borderRadius: 12,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+      }}
+    >
+      <Table2 size={15} />
+      Ver matriz desta conversa
+    </button>
+  </div>
 
       <Field label="Intenção detetada">
         {meta?.intent ? (
@@ -1613,150 +1780,16 @@ function RegulatoryStepIndicator({ step }) {
   );
 }
 
-function RegulatoryEmptyState({ customTemplateName, onUploadTemplate }) {
-  const fileInputRef = useRef(null);
-  return (
-    <div
-      className="bmai-fade-in"
-      style={{
-        minHeight: "100%",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        padding: "16px 32px 28px",
-        maxWidth: 760,
-        margin: "0 auto",
-        width: "100%",
-        boxSizing: "border-box",
-      }}
-    >
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "4px 12px 4px 6px",
-          background: "rgba(31,59,46,0.08)",
-          borderRadius: "var(--r-pill)",
-          fontSize: 12,
-          color: "var(--forest)",
-          marginBottom: 16,
-        }}
-      >
-        <Stethoscope size={13} />
-        Análise guiada de dispositivo + preenchimento PMCF
-      </div>
-
-      <h1
-        style={{
-          fontSize: "clamp(28px, 3.8vw, 52px)",
-          fontWeight: 300,
-          lineHeight: 1.05,
-          letterSpacing: "-0.03em",
-          fontVariationSettings: '"opsz" 144, "SOFT" 20',
-          marginBottom: 12,
-        }}
-      >
-        Descreve o teu
-        <br />
-        <span
-          style={{
-            fontStyle: "italic",
-            color: "var(--forest)",
-            fontVariationSettings: '"opsz" 144, "SOFT" 100',
-            fontWeight: 400,
-          }}
-        >
-          dispositivo médico.
-        </span>
-      </h1>
-
-      <p
-        style={{
-          fontSize: 14.5,
-          lineHeight: 1.6,
-          color: "var(--ink-muted)",
-          maxWidth: 560,
-          marginBottom: 20,
-        }}
-      >
-        Em três passos: <strong>análise regulatória</strong> (classe MDR, AI Act, normas aplicáveis),
-        <strong> recolha da informação em falta</strong> e <strong>preenchimento automático do Plano PMCF</strong>.
-        Campos sensíveis ou em falta ficam sinalizados para revisão manual no documento.
-      </p>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 14px",
-          background: "var(--paper)",
-          border: "1px solid var(--cream-edge)",
-          borderRadius: "var(--r-md)",
-          fontSize: 13,
-          marginBottom: 16,
-          width: "100%",
-          maxWidth: 560,
-        }}
-      >
-        <FileText size={15} color="var(--forest)" />
-        <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ink)", fontWeight: 500 }}>
-            {customTemplateName
-              ? `Template: ${customTemplateName}`
-              : "Template: TMP-CE-05 Post-Market Clinical Follow-Up Plan (pré-carregado)"}
-          </div>
-          <div style={{ color: "var(--ink-faded)", fontSize: 11, marginTop: 2 }}>
-            {customTemplateName
-              ? "Template personalizado será usado ao gerar o documento."
-              : "Podes substituir por um .docx próprio antes de começar."}
-          </div>
-        </div>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="bmai-pressable"
-          style={{
-            border: "1px solid var(--cream-edge)",
-            background: "var(--cream)",
-            color: "var(--forest)",
-            padding: "6px 12px",
-            borderRadius: "var(--r-pill)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <Upload size={12} />
-          {customTemplateName ? "Substituir" : "Carregar .docx"}
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".docx"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onUploadTemplate(f);
-            e.target.value = "";
-          }}
-        />
-      </div>
-
-      <p style={{ fontSize: 12.5, color: "var(--ink-faded)", marginBottom: 0 }}>
-        Exemplo: <em>“Termómetro digital de testa com sensor de infravermelhos e algoritmo de IA
-        que estima a temperatura central a partir da leitura periférica, para utilização em contexto
-        clínico por profissionais de saúde.”</em>
-      </p>
-    </div>
-  );
-}
-
-function RegulatoryActionBar({ pendingAction, loading, onConfirm, onFinalize, onDownload, downloadName, filledCount, flaggedCount }) {
+function RegulatoryActionBar({
+  pendingAction,
+  loading,
+  onConfirm,
+  onFinalize,
+  onDownload,
+  downloadName,
+  filledCount,
+  flaggedCount,
+}) {
   if (pendingAction === "confirm_fill_pmcf") {
     return (
       <div
@@ -1920,6 +1953,447 @@ function RegulatoryActionBar({ pendingAction, loading, onConfirm, onFinalize, on
 }
 
 /* ---------- app shell ---------- */
+
+function TraceabilityPanel({
+  entries,
+  loading,
+  error,
+  onRefresh,
+  onSaveReview,
+  onClose,
+}) {
+  const [drafts, setDrafts] = useState({});
+
+  function getDraft(entry) {
+    return (
+      drafts[entry.id] || {
+        result: entry.result || "",
+        error_type: entry.error_type || "",
+        severity: entry.severity || "",
+        reviewer_notes: entry.reviewer_notes || "",
+      }
+    );
+  }
+
+  function updateDraft(entryId, patch) {
+    setDrafts((prev) => ({
+      ...prev,
+      [entryId]: {
+        ...(prev[entryId] || {}),
+        ...patch,
+      },
+    }));
+  }
+
+  return (
+    <section
+      style={{
+        background: "var(--paper)",
+        border: "1px solid var(--cream-edge)",
+        borderRadius: "var(--r-lg)",
+        padding: "18px 18px 22px",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        overflow: "hidden",
+      }}
+      className="bmai-noise"
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              color: "var(--ink-muted)",
+              fontWeight: 600,
+              marginBottom: 4,
+            }}
+          >
+            Matriz de rastreabilidade
+          </div>
+          <h2
+            style={{
+              fontFamily: "var(--display)",
+              fontSize: 22,
+              margin: 0,
+              color: "var(--ink)",
+              fontWeight: 500,
+            }}
+          >
+            Registo e revisão desta conversa
+          </h2>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button
+            onClick={onClose}
+            className="bmai-pressable"
+            style={{
+              border: "1px solid var(--cream-edge)",
+              background: "transparent",
+              color: "var(--ink-muted)",
+              padding: "8px 14px",
+              borderRadius: "var(--r-pill)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Voltar à conversa
+          </button>
+
+          <button
+            onClick={onRefresh}
+            className="bmai-pressable"
+            style={{
+              border: "1px solid var(--cream-edge)",
+              background: "var(--cream)",
+              color: "var(--forest)",
+              padding: "8px 14px",
+              borderRadius: "var(--r-pill)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Atualizar
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 14px",
+            borderRadius: "var(--r-md)",
+            background: "rgba(162,45,45,0.08)",
+            color: "var(--missing)",
+            border: "1px solid rgba(162,45,45,0.24)",
+            fontSize: 13,
+          }}
+        >
+          <AlertCircle size={15} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        {loading ? (
+          <div style={{ color: "var(--ink-muted)", fontSize: 14 }}>
+            A carregar matriz...
+          </div>
+        ) : entries.length === 0 ? (
+          <div style={{ color: "var(--ink-muted)", fontSize: 14 }}>
+            Ainda não existem entradas na matriz.
+          </div>
+        ) : (
+          entries.map((entry) => {
+            const draft = getDraft(entry);
+
+            return (
+              <div
+                key={entry.id}
+                style={{
+                  border: "1px solid var(--cream-edge)",
+                  borderRadius: "var(--r-lg)",
+                  background: "rgba(239,233,212,0.44)",
+                  padding: "14px 16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <StatusPill tone="forest">{traceTypeLabel(entry.trace_type)}</StatusPill>
+                      <StatusPill tone="info">
+                        {entry.intent || entry.regulatory_step || "Sem classificação"}
+                      </StatusPill>
+                      {entry.result && (
+                        <StatusPill tone={resultTone(entry.result)}>
+                          {entry.result}
+                        </StatusPill>
+                      )}
+                      {entry.severity && (
+                        <StatusPill tone={severityTone(entry.severity)}>
+                          Severidade: {entry.severity}
+                        </StatusPill>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--ink-faded)",
+                        fontFamily: "var(--mono)",
+                      }}
+                    >
+                      {shortDate(entry.created_at)}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--ink-faded)",
+                      fontFamily: "var(--mono)",
+                    }}
+                  >
+                    {entry.id}
+                  </div>
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                      color: "var(--ink-muted)",
+                      fontWeight: 600,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Pergunta / origem
+                  </div>
+                  <div style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.5 }}>
+                    {entry.question || "—"}
+                  </div>
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                      color: "var(--ink-muted)",
+                      fontWeight: 600,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Resposta / saída
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "var(--ink-muted)",
+                      lineHeight: 1.55,
+                      maxHeight: 140,
+                      overflow: "auto",
+                      whiteSpace: "pre-wrap",
+                      paddingRight: 4,
+                    }}
+                  >
+                    {entry.answer || "—"}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <label style={{ fontSize: 12, color: "var(--ink-muted)", display: "block", marginBottom: 6 }}>
+                      Resultado
+                    </label>
+                    <select
+                      value={draft.result}
+                      onChange={(e) => updateDraft(entry.id, { result: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--cream-edge)",
+                        background: "var(--paper)",
+                        fontSize: 13,
+                        color: "var(--ink)",
+                      }}
+                    >
+                      <option value="">—</option>
+                      <option value="OK">OK</option>
+                      <option value="PARCIAL">PARCIAL</option>
+                      <option value="NOK">NOK</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, color: "var(--ink-muted)", display: "block", marginBottom: 6 }}>
+                      Tipo de erro
+                    </label>
+                    <select
+                      value={draft.error_type}
+                      onChange={(e) => updateDraft(entry.id, { error_type: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--cream-edge)",
+                        background: "var(--paper)",
+                        fontSize: 13,
+                        color: "var(--ink)",
+                      }}
+                    >
+                      <option value="">—</option>
+                      <option value="E1">E1 — Alucinação / facto incorreto</option>
+                      <option value="E2">E2 — Fonte inadequada</option>
+                      <option value="E3">E3 — Fonte ausente</option>
+                      <option value="E4">E4 — Interpretação regulatória incorreta</option>
+                      <option value="E5">E5 — Resposta incompleta</option>
+                      <option value="E6">E6 — Resposta fora do âmbito</option>
+                      <option value="E7">E7 — Clareza / redação</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, color: "var(--ink-muted)", display: "block", marginBottom: 6 }}>
+                      Severidade
+                    </label>
+                    <select
+                      value={draft.severity}
+                      onChange={(e) => updateDraft(entry.id, { severity: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--cream-edge)",
+                        background: "var(--paper)",
+                        fontSize: 13,
+                        color: "var(--ink)",
+                      }}
+                    >
+                      <option value="">—</option>
+                      <option value="baixa">baixa</option>
+                      <option value="média">média</option>
+                      <option value="alta">alta</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, color: "var(--ink-muted)", display: "block", marginBottom: 6 }}>
+                    Notas do revisor
+                  </label>
+                  <textarea
+                    value={draft.reviewer_notes}
+                    onChange={(e) =>
+                      updateDraft(entry.id, { reviewer_notes: e.target.value })
+                    }
+                    rows={3}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: "1px solid var(--cream-edge)",
+                      background: "var(--paper)",
+                      fontSize: 13,
+                      color: "var(--ink)",
+                      resize: "vertical",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    onClick={() =>
+                      setDrafts((prev) => {
+                        const copy = { ...prev };
+                        delete copy[entry.id];
+                        return copy;
+                      })
+                    }
+                    className="bmai-pressable"
+                    style={{
+                      border: "1px solid var(--cream-edge)",
+                      background: "transparent",
+                      color: "var(--ink-muted)",
+                      padding: "8px 12px",
+                      borderRadius: "var(--r-pill)",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <XCircle size={14} />
+                    Limpar
+                  </button>
+
+                  <button
+                    onClick={() => onSaveReview(entry.id, draft)}
+                    className="bmai-pressable"
+                    style={{
+                      border: "none",
+                      background: "var(--forest)",
+                      color: "var(--paper)",
+                      padding: "8px 14px",
+                      borderRadius: "var(--r-pill)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Save size={14} />
+                    Guardar revisão
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+
 export default function ChatbotApp() {
   const { token, user, logout } = useAuth();
   const navigate = useNavigate();
@@ -1930,6 +2404,13 @@ export default function ChatbotApp() {
   const [chatState, setChatState] = useState({ loading: false, error: "" });
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const [showTraceability, setShowTraceability] = useState(false);
+  const [traceabilityEntries, setTraceabilityEntries] = useState([]);
+  const [traceabilityState, setTraceabilityState] = useState({
+    loading: false,
+    error: "",
+  });
 
   const [conversations, setConversations] = useState(() => {
     try {
@@ -1967,6 +2448,9 @@ export default function ChatbotApp() {
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) || conversations[0];
 
+  const regulatoryActive = hasActiveRegulatoryFlow(activeConversation);
+  const currentRegulatoryStep = activeConversation?.regulatory?.step || null;
+
   useEffect(() => {
     if (!activeConversationId && conversations.length > 0) {
       setActiveConversationId(conversations[0].id);
@@ -1989,6 +2473,12 @@ export default function ChatbotApp() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [activeConversation?.messages, chatState.loading]);
+
+  useEffect(() => {
+    if (showTraceability && activeConversation?.id) {
+      fetchTraceability(activeConversation.id);
+    }
+  }, [showTraceability, activeConversation?.id]);
 
   async function callApi(path, options = {}) {
     const response = await fetch(`${normalizedBaseUrl}${path}`, {
@@ -2030,19 +2520,59 @@ export default function ChatbotApp() {
     }
   }
 
+  async function fetchTraceability(conversationId = activeConversation?.id) {
+    if (!conversationId) {
+      setTraceabilityEntries([]);
+      setTraceabilityState({ loading: false, error: "" });
+      return;
+    }
+
+    setTraceabilityState({ loading: true, error: "" });
+    try {
+      const data = await callApi(
+        `/traceability?limit=200&conversation_id=${encodeURIComponent(conversationId)}`,
+        { method: "GET" }
+      );
+      setTraceabilityEntries(Array.isArray(data) ? data : []);
+      setTraceabilityState({ loading: false, error: "" });
+    } catch (error) {
+      setTraceabilityState({
+        loading: false,
+        error: error.message || "Erro ao carregar a matriz.",
+      });
+    }
+  }
+
+  async function saveTraceabilityReview(traceId, draft) {
+    try {
+      const payload = {
+        result: draft.result || null,
+        error_type: draft.error_type || null,
+        severity: draft.severity || null,
+        reviewer_notes: draft.reviewer_notes || null,
+      };
+
+      const updated = await callApi(`/traceability/${traceId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+
+      setTraceabilityEntries((prev) =>
+        prev.map((entry) => (entry.id === traceId ? updated : entry))
+      );
+    } catch (error) {
+      setTraceabilityState((prev) => ({
+        ...prev,
+        error: error.message || "Erro ao guardar revisão.",
+      }));
+    }
+  }
+
   function handleNewConversation() {
     const nc = createConversation("Nova conversa");
     setConversations((prev) => [nc, ...prev]);
     setActiveConversationId(nc.id);
-    setInput("");
-    setChatState({ loading: false, error: "" });
-    inputRef.current?.focus();
-  }
-
-  function handleNewRegulatoryConversation() {
-    const nc = createConversation("Análise de dispositivo", "regulatory");
-    setConversations((prev) => [nc, ...prev]);
-    setActiveConversationId(nc.id);
+    setShowTraceability(false);
     setInput("");
     setChatState({ loading: false, error: "" });
     inputRef.current?.focus();
@@ -2078,15 +2608,18 @@ export default function ChatbotApp() {
   }
 
   async function handleUploadTemplate(file) {
-    if (!file || !activeConversation || activeConversation.mode !== "regulatory") return;
+    if (!file || !activeConversation) return;
+
     setChatState({ loading: true, error: "" });
     try {
       let sessionId = activeConversation.regulatory?.sessionId;
       if (!sessionId) {
         sessionId = crypto.randomUUID();
       }
+
       const fd = new FormData();
       fd.append("file", file);
+
       const response = await fetch(
         `${normalizedBaseUrl}/regulatory/upload-template?session_id=${encodeURIComponent(sessionId)}`,
         {
@@ -2095,20 +2628,25 @@ export default function ChatbotApp() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
       );
+
       const data = await response.json();
       if (!response.ok) throw new Error(data?.detail || "Erro ao carregar template.");
+
       updateActiveConversation({
         regulatory: {
           ...(activeConversation.regulatory || {}),
           sessionId: data.session_id,
+          step: activeConversation.regulatory?.step || "awaiting_description",
           customTemplateName: data.template_name,
         },
       });
+
       appendMessage({
         id: crypto.randomUUID(),
         role: "assistant",
-        content: `Template personalizado carregado: \`${data.template_name}\`. Podes agora descrever o dispositivo.`,
+        content: `Template personalizado carregado: \`${data.template_name}\`. Podes agora descrever o dispositivo ou continuar a conversa.`,
       });
+
       setChatState({ loading: false, error: "" });
     } catch (error) {
       setChatState({ loading: false, error: error.message || "Erro ao carregar template." });
@@ -2118,19 +2656,26 @@ export default function ChatbotApp() {
   async function handleRegulatoryConfirm(accept) {
     const sessionId = activeConversation?.regulatory?.sessionId;
     if (!sessionId) return;
+
     setChatState({ loading: true, error: "" });
     try {
       const data = await callApi("/regulatory/confirm", {
         method: "POST",
-        body: JSON.stringify({ session_id: sessionId, accept }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          accept,
+          conversation_id: activeConversation.id,
+        }),
       });
+
       appendMessage(
         {
           id: crypto.randomUUID(),
           role: "user",
           content: accept ? "Sim, por favor preenche o PMCF." : "Não, obrigado.",
-        },
+        }
       );
+
       appendMessage(
         {
           id: crypto.randomUUID(),
@@ -2150,6 +2695,7 @@ export default function ChatbotApp() {
           },
         }
       );
+
       setChatState({ loading: false, error: "" });
     } catch (error) {
       setChatState({ loading: false, error: error.message || "Erro na confirmação." });
@@ -2159,19 +2705,26 @@ export default function ChatbotApp() {
   async function handleRegulatoryFinalize() {
     const sessionId = activeConversation?.regulatory?.sessionId;
     if (!sessionId) return;
+
     setChatState({ loading: true, error: "" });
     try {
       const data = await callApi("/regulatory/finalize", {
         method: "POST",
-        body: JSON.stringify({ session_id: sessionId, accept: true }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          accept: true,
+          conversation_id: activeConversation.id,
+        }),
       });
+
       appendMessage(
         {
           id: crypto.randomUUID(),
           role: "user",
           content: "Gera o documento com os campos em falta sinalizados.",
-        },
+        }
       );
+
       appendMessage(
         {
           id: crypto.randomUUID(),
@@ -2191,7 +2744,12 @@ export default function ChatbotApp() {
           },
         }
       );
+
       setChatState({ loading: false, error: "" });
+
+      if (showTraceability) {
+      fetchTraceability();
+    }
     } catch (error) {
       setChatState({ loading: false, error: error.message || "Erro na finalização." });
     }
@@ -2217,12 +2775,61 @@ export default function ChatbotApp() {
 
   async function sendMessage(maybeText) {
     const question = (maybeText ?? input).trim();
+    const history = buildConversationHistory(activeConversation?.messages || []);
     if (!question || !activeConversation || chatState.loading) return;
 
-    if (activeConversation.mode === "regulatory") {
-      await sendRegulatoryMessage(question);
+    const regulatory = activeConversation.regulatory;
+    const regulatoryStep = regulatory?.step;
+
+    const regulatoryInProgress =
+      regulatory &&
+      (
+        regulatoryStep === "awaiting_description" ||
+        regulatoryStep === "awaiting_fill_confirmation" ||
+        regulatoryStep === "collecting_info" ||
+        regulatoryStep === "document_ready"
+      );
+
+    if (regulatoryInProgress) {
+      if (
+        regulatoryStep === "awaiting_description" ||
+        regulatoryStep === "collecting_info"
+      ) {
+        await sendRegulatoryMessage(question);
+        return;
+      }
+
+      setChatState({
+        loading: false,
+        error: "Usa os botões disponíveis para continuar o preenchimento do PMCF.",
+      });
       return;
     }
+
+    if (isPmcfGenerationCommand(question)) {
+  const lastDeviceDescription = findLastUsefulDeviceDescription(
+    activeConversation?.messages || []
+  );
+
+  if (!lastDeviceDescription) {
+    setChatState({
+      loading: false,
+      error: "Não encontrei uma descrição anterior do dispositivo nesta conversa para iniciar o PMCF.",
+    });
+    return;
+  }
+
+  await sendRegulatoryMessage(lastDeviceDescription, {
+    startIfNeeded: true,
+    triggerText: question,
+  });
+  return;
+}
+
+if (shouldStartRegulatoryFlow(question)) {
+  await sendRegulatoryMessage(question, { startIfNeeded: true });
+  return;
+}
 
     setChatState({ loading: true, error: "" });
     const userMessage = { id: crypto.randomUUID(), role: "user", content: question };
@@ -2245,8 +2852,13 @@ export default function ChatbotApp() {
     try {
       const data = await callApi("/chat", {
         method: "POST",
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({
+          question,
+          conversation_id: activeConversation.id,
+          history,
+        }),
       });
+
       const assistantMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -2271,18 +2883,32 @@ export default function ChatbotApp() {
             : c
         )
       );
+
       setChatState({ loading: false, error: "" });
+
+      if (showTraceability) {
+      fetchTraceability();
+    }
     } catch (error) {
       setChatState({ loading: false, error: error.message || "Erro no endpoint /chat." });
     }
   }
 
-  async function sendRegulatoryMessage(text) {
+  async function sendRegulatoryMessage(text, options = {}) {
     setChatState({ loading: true, error: "" });
+
     const regulatory = activeConversation.regulatory || {};
     const step = regulatory.step || "awaiting_description";
+    const shouldStart = options.startIfNeeded || !regulatory?.sessionId;
+    const history = buildConversationHistory(activeConversation?.messages || []);
 
-    const userMessage = { id: crypto.randomUUID(), role: "user", content: text };
+    const visibleUserText = options.triggerText || text;
+    const userMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: visibleUserText,
+    };
+
     setConversations((prev) =>
       prev.map((c) =>
         c.id === activeConversation.id
@@ -2295,16 +2921,20 @@ export default function ChatbotApp() {
           : c
       )
     );
+
     setInput("");
 
     try {
       let data;
-      if (step === "awaiting_description") {
+
+      if (shouldStart || step === "awaiting_description") {
         data = await callApi("/regulatory/start", {
           method: "POST",
           body: JSON.stringify({
             description: text,
             session_id: regulatory.sessionId || null,
+            conversation_id: activeConversation.id,
+            history,
           }),
         });
       } else if (step === "collecting_info") {
@@ -2313,6 +2943,7 @@ export default function ChatbotApp() {
           body: JSON.stringify({
             session_id: regulatory.sessionId,
             message: text,
+            conversation_id: activeConversation.id,
           }),
         });
       } else {
@@ -2342,13 +2973,19 @@ export default function ChatbotApp() {
                   flaggedFields: data.flagged_fields || c.regulatory?.flaggedFields || [],
                   downloadUrl: data.download_url || c.regulatory?.downloadUrl || null,
                   downloadName: data.download_name || c.regulatory?.downloadName || null,
+                  customTemplateName: c.regulatory?.customTemplateName || null,
                 },
                 updatedAt: new Date().toISOString(),
               }
             : c
         )
       );
+
       setChatState({ loading: false, error: "" });
+
+      if (showTraceability) {
+      fetchTraceability();
+    }
     } catch (error) {
       setChatState({ loading: false, error: error.message || "Erro no fluxo regulatório." });
     }
@@ -2392,7 +3029,6 @@ export default function ChatbotApp() {
         }}
         className="bmai-noise"
       >
-        {/* subtle top-right ornament */}
         <div
           aria-hidden
           style={{
@@ -2490,30 +3126,6 @@ export default function ChatbotApp() {
           {!sidebarCollapsed && "Nova conversa"}
         </button>
 
-        <button
-          onClick={handleNewRegulatoryConversation}
-          className="bmai-pressable"
-          title="Analisar dispositivo e preencher PMCF"
-          style={{
-            background: "rgba(239,233,212,0.08)",
-            color: "var(--paper)",
-            border: "1px solid rgba(239,233,212,0.18)",
-            borderRadius: 14,
-            padding: sidebarCollapsed ? "10px 0" : "10px 14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: sidebarCollapsed ? "center" : "flex-start",
-            gap: 10,
-            fontWeight: 500,
-            fontSize: 13,
-            cursor: "pointer",
-            fontFamily: "var(--body)",
-          }}
-        >
-          <Stethoscope size={15} />
-          {!sidebarCollapsed && "Analisar dispositivo"}
-        </button>
-
         {!sidebarCollapsed && (
           <>
             <div
@@ -2544,7 +3156,10 @@ export default function ChatbotApp() {
                 return (
                   <div
                     key={c.id}
-                    onClick={() => setActiveConversationId(c.id)}
+                    onClick={() => {
+                      setActiveConversationId(c.id);
+                      setShowTraceability(false);
+                    }}
                     className="bmai-pressable"
                     style={{
                       display: "flex",
@@ -2560,7 +3175,7 @@ export default function ChatbotApp() {
                       }`,
                     }}
                   >
-                    {c.mode === "regulatory" ? (
+                    {hasActiveRegulatoryFlow(c) ? (
                       <Stethoscope size={14} style={{ flexShrink: 0, opacity: 0.8 }} />
                     ) : (
                       <MessageSquare size={14} style={{ flexShrink: 0, opacity: 0.8 }} />
@@ -2598,7 +3213,6 @@ export default function ChatbotApp() {
               })}
             </div>
 
-            {/* footer */}
             <div
               style={{
                 marginTop: "auto",
@@ -2776,7 +3390,6 @@ export default function ChatbotApp() {
           overflow: "hidden",
         }}
       >
-        {/* topbar */}
         <header
           style={{
             display: "flex",
@@ -2797,7 +3410,9 @@ export default function ChatbotApp() {
                 marginBottom: 4,
               }}
             >
-              {activeConversation?.title && activeConversation.messages.length > 0
+              {showTraceability
+                ? "Revisão"
+                : activeConversation?.title && activeConversation.messages.length > 0
                 ? "Sessão atual"
                 : "Nova sessão"}
             </div>
@@ -2813,11 +3428,11 @@ export default function ChatbotApp() {
                 fontVariationSettings: '"opsz" 72, "SOFT" 40',
                 maxWidth: 680,
               }}
-            >
-              {activeConversation?.title && activeConversation.messages.length > 0 ? (
-                <span>
-                  {activeConversation.title}
-                </span>
+            > 
+              {showTraceability ? (
+                <span>Matriz desta conversa</span>
+              ) : activeConversation?.title && activeConversation.messages.length > 0 ? (
+                <span>{activeConversation.title}</span>
               ) : (
                 <>
                   Framework integrado de{" "}
@@ -2833,17 +3448,14 @@ export default function ChatbotApp() {
           <HealthIndicator state={health.state} />
         </header>
 
-        {/* KPI bar (apenas modo RAG) */}
-        {activeConversation?.mode !== "regulatory" && currentMeta && messages.length > 0 && (
+        {!regulatoryActive && currentMeta && messages.length > 0 && (
           <KpiBar meta={currentMeta} />
         )}
 
-        {/* Step indicator (apenas modo regulatório) */}
-        {activeConversation?.mode === "regulatory" && (
-          <RegulatoryStepIndicator step={activeConversation.regulatory?.step || "awaiting_description"} />
+        {regulatoryActive && (
+          <RegulatoryStepIndicator step={currentRegulatoryStep || "awaiting_description"} />
         )}
 
-        {/* alerts */}
         {chatState.error && (
           <div
             style={{
@@ -2863,6 +3475,7 @@ export default function ChatbotApp() {
             <span>{chatState.error}</span>
           </div>
         )}
+
         {health.state === "error" && health.error && (
           <div
             style={{
@@ -2883,218 +3496,234 @@ export default function ChatbotApp() {
           </div>
         )}
 
-        {/* chat + details */}
+        <div
+  style={{
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    gap: 14,
+    alignItems: "stretch",
+  }}
+>
+  {showTraceability ? (
+    <TraceabilityPanel
+      entries={traceabilityEntries}
+      loading={traceabilityState.loading}
+      error={traceabilityState.error}
+      onRefresh={() => fetchTraceability(activeConversation?.id)}
+      onSaveReview={saveTraceabilityReview}
+      onClose={() => setShowTraceability(false)}
+    />
+  ) : (
+    <>
+      <section
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minWidth: 0,
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
         <div
           style={{
             flex: 1,
             minHeight: 0,
-            display: "flex",
-            gap: 14,
-            alignItems: "stretch",
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: isEmpty ? 0 : "6px 4px 20px",
           }}
         >
-          <section
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              minWidth: 0,
-              minHeight: 0,
-              overflow: "hidden",
-            }}
-          >
+          {isEmpty ? (
+            <EmptyState onPick={(q) => sendMessage(q)} />
+          ) : (
             <div
               style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                overflowX: "hidden",
-                /* no horizontal bleed — keep padding inside so scrollbar stays at edge */
-                padding: isEmpty ? 0 : "6px 4px 20px",
-              }}
-            >
-              {isEmpty ? (
-                activeConversation?.mode === "regulatory" ? (
-                  <RegulatoryEmptyState
-                    customTemplateName={activeConversation.regulatory?.customTemplateName}
-                    onUploadTemplate={handleUploadTemplate}
-                  />
-                ) : (
-                  <EmptyState onPick={(q) => sendMessage(q)} />
-                )
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 22,
-                    maxWidth: 860,
-                    marginLeft: "auto",
-                    marginRight: "auto",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  {messages.map((m, idx) => {
-                    const isLast = idx === messages.length - 1;
-                    return m.role === "user" ? (
-                      <UserBubble key={m.id} content={m.content} />
-                    ) : (
-                      <AssistantCard
-                        key={m.id}
-                        content={m.content}
-                        meta={m.meta}
-                        isLast={isLast}
-                      />
-                    );
-                  })}
-                  {chatState.loading && <TypingIndicator />}
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
-            </div>
-
-            {/* regulatory action bar */}
-            {activeConversation?.mode === "regulatory" && activeConversation.regulatory?.pendingAction && (
-              <RegulatoryActionBar
-                pendingAction={activeConversation.regulatory.pendingAction}
-                loading={chatState.loading}
-                onConfirm={handleRegulatoryConfirm}
-                onFinalize={handleRegulatoryFinalize}
-                onDownload={async () => {
-                  const url = `${normalizedBaseUrl}/regulatory/download/${activeConversation.regulatory.sessionId}`;
-                  const res = await fetch(url, {
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
-                  });
-                  if (!res.ok) {
-                    setChatState({ loading: false, error: "Erro ao descarregar documento." });
-                    return;
-                  }
-                  const blob = await res.blob();
-                  const blobUrl = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = blobUrl;
-                  a.download = activeConversation.regulatory.downloadName || "documento.docx";
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                  URL.revokeObjectURL(blobUrl);
-                }}
-                downloadName={activeConversation.regulatory.downloadName}
-                filledCount={(activeConversation.regulatory.filledFields || []).length}
-                flaggedCount={(activeConversation.regulatory.flaggedFields || []).length}
-              />
-            )}
-
-            {/* input area */}
-            <div
-              style={{
-                flexShrink: 0,
-                marginTop: 8,
-                padding: "12px 14px",
-                background: "var(--paper)",
-                border: "1px solid var(--cream-edge)",
-                borderRadius: "var(--r-lg)",
-                boxShadow: "var(--shadow-soft)",
                 display: "flex",
-                alignItems: "flex-end",
-                gap: 10,
+                flexDirection: "column",
+                gap: 22,
                 maxWidth: 860,
+                marginLeft: "auto",
+                marginRight: "auto",
                 width: "100%",
-                alignSelf: "center",
                 boxSizing: "border-box",
-                opacity:
-                  activeConversation?.mode === "regulatory" &&
-                  activeConversation.regulatory?.step === "document_ready"
-                    ? 0.5
-                    : 1,
               }}
             >
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                disabled={
-                  activeConversation?.mode === "regulatory" &&
-                  (activeConversation.regulatory?.step === "awaiting_fill_confirmation" ||
-                   activeConversation.regulatory?.step === "document_ready")
-                }
-                placeholder={
-                  activeConversation?.mode === "regulatory"
-                    ? (activeConversation.regulatory?.step === "awaiting_description"
-                        ? "Descreve o dispositivo: finalidade, utilizadores, modo de utilização, componente de IA..."
-                        : activeConversation.regulatory?.step === "collecting_info"
-                        ? "Responde às perguntas acima (podes responder só a algumas)..."
-                        : activeConversation.regulatory?.step === "awaiting_fill_confirmation"
-                        ? "Usa os botões acima para continuar."
-                        : "Documento pronto — descarrega acima.")
-                    : "Escreve a tua pergunta sobre MDR, AI Act, classificação..."
-                }
-                style={{
-                  flex: 1,
-                  border: "none",
-                  background: "transparent",
-                  resize: "none",
-                  outline: "none",
-                  fontSize: 15,
-                  lineHeight: 1.5,
-                  fontFamily: "var(--body)",
-                  color: "var(--ink)",
-                  padding: "8px 6px",
-                  minHeight: 40,
-                  maxHeight: 200,
-                }}
-              />
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  paddingBottom: 4,
-                }}
-              >
-                <span style={{ fontSize: 11, color: "var(--ink-faded)", userSelect: "none" }}>
-                  Enter ↵
-                </span>
-                <button
-                  onClick={() => sendMessage()}
-                  disabled={chatState.loading || !input.trim()}
-                  title="Enviar"
-                  className="bmai-pressable"
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: "50%",
-                    border: "none",
-                    background:
-                      chatState.loading || !input.trim()
-                        ? "rgba(31,59,46,0.18)"
-                        : "var(--forest)",
-                    color: "var(--paper)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor:
-                      chatState.loading || !input.trim() ? "not-allowed" : "pointer",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Send size={16} strokeWidth={2.2} />
-                </button>
-              </div>
+              {messages.map((m, idx) => {
+                const isLast = idx === messages.length - 1;
+                return m.role === "user" ? (
+                  <UserBubble key={m.id} content={m.content} />
+                ) : (
+                  <AssistantCard
+                    key={m.id}
+                    content={m.content}
+                    meta={m.meta}
+                    isLast={isLast}
+                  />
+                );
+              })}
+              {chatState.loading && <TypingIndicator />}
+              <div ref={messagesEndRef} />
             </div>
-          </section>
-
-          {activeConversation?.mode !== "regulatory" && (
-            <DetailsPanel
-              meta={currentMeta}
-              collapsed={detailsCollapsed}
-              onToggle={() => setDetailsCollapsed((v) => !v)}
-            />
           )}
         </div>
+
+        {regulatoryActive && activeConversation.regulatory?.pendingAction && (
+          <RegulatoryActionBar
+            pendingAction={activeConversation.regulatory.pendingAction}
+            loading={chatState.loading}
+            onConfirm={handleRegulatoryConfirm}
+            onFinalize={handleRegulatoryFinalize}
+            onDownload={async () => {
+              const sessionId = activeConversation.regulatory?.sessionId;
+              if (!sessionId) {
+                setChatState({ loading: false, error: "Sessão regulatória inválida." });
+                return;
+              }
+
+              const url = `${normalizedBaseUrl}/regulatory/download/${sessionId}`;
+              const res = await fetch(url, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              });
+
+              if (!res.ok) {
+                setChatState({ loading: false, error: "Erro ao descarregar documento." });
+                return;
+              }
+
+              const blob = await res.blob();
+              const blobUrl = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = blobUrl;
+              a.download = activeConversation.regulatory.downloadName || "documento.docx";
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(blobUrl);
+            }}
+            downloadName={activeConversation.regulatory.downloadName}
+            filledCount={(activeConversation.regulatory.filledFields || []).length}
+            flaggedCount={(activeConversation.regulatory.flaggedFields || []).length}
+          />
+        )}
+
+        <div
+          style={{
+            flexShrink: 0,
+            marginTop: 8,
+            padding: "12px 14px",
+            background: "var(--paper)",
+            border: "1px solid var(--cream-edge)",
+            borderRadius: "var(--r-lg)",
+            boxShadow: "var(--shadow-soft)",
+            display: "flex",
+            alignItems: "flex-end",
+            gap: 10,
+            maxWidth: 860,
+            width: "100%",
+            alignSelf: "center",
+            boxSizing: "border-box",
+            opacity:
+              regulatoryActive && currentRegulatoryStep === "document_ready"
+                ? 0.5
+                : 1,
+          }}
+        >
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            disabled={
+              regulatoryActive &&
+              (
+                currentRegulatoryStep === "awaiting_fill_confirmation" ||
+                currentRegulatoryStep === "document_ready"
+              )
+            }
+            placeholder={
+              regulatoryActive
+                ? currentRegulatoryStep === "collecting_info"
+                  ? "Responde às perguntas acima (podes responder só a algumas)..."
+                  : currentRegulatoryStep === "awaiting_fill_confirmation"
+                  ? "Usa os botões acima para continuar."
+                  : currentRegulatoryStep === "document_ready"
+                  ? "Documento pronto — descarrega acima."
+                  : "Descreve o dispositivo ou faz uma pergunta regulatória..."
+                : "Faz uma pergunta regulatória ou descreve um dispositivo médico..."
+            }
+            style={{
+              flex: 1,
+              border: "none",
+              background: "transparent",
+              resize: "none",
+              outline: "none",
+              fontSize: 15,
+              lineHeight: 1.5,
+              fontFamily: "var(--body)",
+              color: "var(--ink)",
+              padding: "8px 6px",
+              minHeight: 40,
+              maxHeight: 200,
+            }}
+          />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              paddingBottom: 4,
+            }}
+          >
+            <span style={{ fontSize: 11, color: "var(--ink-faded)", userSelect: "none" }}>
+              Enter ↵
+            </span>
+            <button
+              onClick={() => sendMessage()}
+              disabled={chatState.loading || !input.trim()}
+              title="Enviar"
+              className="bmai-pressable"
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: "50%",
+                border: "none",
+                background:
+                  chatState.loading || !input.trim()
+                    ? "rgba(31,59,46,0.18)"
+                    : "var(--forest)",
+                color: "var(--paper)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor:
+                  chatState.loading || !input.trim() ? "not-allowed" : "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <Send size={16} strokeWidth={2.2} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {!regulatoryActive && !showTraceability && (
+        <DetailsPanel
+          meta={currentMeta}
+          collapsed={detailsCollapsed}
+          onToggle={() => setDetailsCollapsed((v) => !v)}
+          traceabilityActive={showTraceability}
+          onOpenTraceability={() => {
+            setShowTraceability(true);
+            fetchTraceability(activeConversation?.id);
+          }}
+        />
+      )}
+    </>
+  )}
+</div>
       </main>
     </div>
   );
