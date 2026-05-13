@@ -258,19 +258,29 @@ function shouldStartRegulatoryFlow(text) {
 
 
 function isPmcfGenerationCommand(text) {
-    const t = (text || "").trim().toLowerCase();
-    if (!t) return false;
+  const t = (text || "").trim().toLowerCase();
+  if (!t) return false;
 
-    return [
-      "faz agora o documento pmcf",
-      "faz o documento pmcf",
-      "gera o documento pmcf",
-      "gera o pmcf",
-      "cria o documento pmcf",
-      "preenche o pmcf",
-      "faz agora o pmcf",
-    ].some((expr) => t.includes(expr));
-  }
+  const hasPmcf =
+    t.includes("pmcf") ||
+    t.includes("pcmf") ||
+    t.includes("plano de follow-up clínico pós-mercado") ||
+    t.includes("plano de follow up clinico pos mercado");
+
+  const hasGenerationVerb =
+    t.includes("gera") ||
+    t.includes("gerar") ||
+    t.includes("cria") ||
+    t.includes("criar") ||
+    t.includes("faz") ||
+    t.includes("fazer") ||
+    t.includes("preenche") ||
+    t.includes("preencher") ||
+    t.includes("documento") ||
+    t.includes("plano");
+
+  return hasPmcf && hasGenerationVerb;
+}
 
   function buildConversationHistory(messages, limit = 8) {
     return (messages || [])
@@ -282,21 +292,6 @@ function isPmcfGenerationCommand(text) {
       .filter((m) => m.role && m.content);
   }
 
-  function findLastUsefulDeviceDescription(messages) {
-    const reversed = [...(messages || [])].reverse();
-
-    for (const msg of reversed) {
-      if (msg.role !== "user") continue;
-
-      const text = (msg.content || "").trim();
-      if (!text) continue;
-      if (isPmcfGenerationCommand(text)) continue;
-
-      return text;
-    }
-
-    return null;
-  }
 
 const REGULATORY_STEPS = [
   { key: "awaiting_description", short: "Análise", long: "1. Análise do dispositivo" },
@@ -1213,7 +1208,7 @@ function TypingIndicator() {
           gap: 10,
         }}
       >
-        <span>A consultar o corpus normativo</span>
+        <span>A pensar</span>
         <span style={{ color: "var(--forest)", display: "inline-flex" }}>
           <span className="bmai-dot" />
           <span className="bmai-dot" />
@@ -2807,24 +2802,12 @@ export default function ChatbotApp() {
     }
 
     if (isPmcfGenerationCommand(question)) {
-  const lastDeviceDescription = findLastUsefulDeviceDescription(
-    activeConversation?.messages || []
-  );
-
-  if (!lastDeviceDescription) {
-    setChatState({
-      loading: false,
-      error: "Não encontrei uma descrição anterior do dispositivo nesta conversa para iniciar o PMCF.",
-    });
+      await sendRegulatoryMessage(question, {
+        startIfNeeded: true,
+      });
     return;
-  }
-
-  await sendRegulatoryMessage(lastDeviceDescription, {
-    startIfNeeded: true,
-    triggerText: question,
-  });
-  return;
 }
+
 
 if (shouldStartRegulatoryFlow(question)) {
   await sendRegulatoryMessage(question, { startIfNeeded: true });

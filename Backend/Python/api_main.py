@@ -378,6 +378,7 @@ class SearchResponse(BaseModel):
             "regulatory_scope",
             "classification_risk",
             "documentation",
+            "document_generation",
             "conformity_procedure",
             "requirement_lookup",
         ],
@@ -422,7 +423,7 @@ class ChatResponse(BaseModel):
     intent: str = Field(
         ...,
         description="Intenção inferida automaticamente a partir da pergunta.",
-        examples=["regulatory_scope", "classification_risk"],
+        examples=["regulatory_scope", "classification_risk", "document_generation", "documentation", "conformity_procedure", "requirement_lookup"],
     )
     target_docs: List[str] = Field(
         ...,
@@ -530,9 +531,11 @@ def require_admin(user: AuthUser = Depends(require_active)) -> AuthUser:
 
 
 def require_chatbot_access(user: AuthUser = Depends(require_active)) -> AuthUser:
-    """Acesso ao chatbot e fluxo regulatório — user ou specialist, com conta activa."""
-    if user.role not in ("user", "specialist"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito a users e especialistas.")
+    if user.role not in ("user", "specialist", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito a users, especialistas e administradores.",
+        )
     return user
 
 
@@ -556,6 +559,15 @@ def _is_pmcf_generation_command(text: Optional[str]) -> bool:
         "cria o documento pmcf",
         "preenche o pmcf",
         "faz agora o pmcf",
+        "faz o documento pcmf",
+        "gera o documento pcmf",
+        "gera o pcmf",
+        "cria o documento pcmf",
+        "preenche o pcmf",
+        "documento pmcf",
+        "documento pcmf",
+        "plano pmcf",
+        "plano pcmf",
     ]
     return any(cmd in t for cmd in commands)
 
@@ -565,47 +577,152 @@ def _looks_like_device_description(text: str) -> bool:
     if not t:
         return False
 
-    if "?" in t:
-        return False
-
     device_signals = [
         "dispositivo médico",
+        "dispositivo medico",
         "software médico",
+        "software medico",
         "algoritmo de ia",
         "sensor de",
         "utilização em contexto clínico",
+        "utilizacao em contexto clinico",
         "profissionais de saúde",
+        "profissionais de saude",
         "finalidade prevista",
         "termómetro",
+        "termometro",
         "pacemaker",
         "ressonância magnética",
+        "ressonancia magnetica",
         "monitorização",
+        "monitorizacao",
         "diagnóstico",
+        "diagnostico",
+        "não invasivo",
+        "nao invasivo",
+        "classe de risco",
         "classe i",
         "classe iia",
         "classe iib",
         "classe iii",
     ]
 
-    hits = sum(1 for s in device_signals if s in t)
-    return len(t) >= 80 and hits >= 2
+    regulatory_signals = [
+        "mdr",
+        "classe",
+        "risco",
+        "anexo viii",
+        "regra",
+        "diagnóstico",
+        "diagnostico",
+        "monitorização",
+        "monitorizacao",
+        "clínico",
+        "clinico",
+        "médico",
+        "medico",
+    ]
+
+    has_device_signal = any(s in t for s in device_signals)
+    has_regulatory_signal = any(s in t for s in regulatory_signals)
+
+    return len(t) >= 20 and has_device_signal and has_regulatory_signal
+
+
+def _message_content(msg: Any) -> str:
+    if isinstance(msg, dict):
+        return str(msg.get("content", "") or "")
+    return str(getattr(msg, "content", "") or "")
+
+
+def _message_role(msg: Any) -> str:
+    if isinstance(msg, dict):
+        return str(msg.get("role", "") or "").lower()
+    return str(getattr(msg, "role", "") or "").lower()
+
+
+def _extract_referenced_user_message(
+    command: str,
+    history: Optional[List[Any]],
+) -> Optional[str]:
+    if not history:
+        return None
+
+    t = (command or "").strip().lower()
+
+    ordinal_map = {
+        "primeira": 1,
+        "primeiro": 1,
+        "1ª": 1,
+        "1a": 1,
+        "1º": 1,
+        "segunda": 2,
+        "segundo": 2,
+        "2ª": 2,
+        "2a": 2,
+        "2º": 2,
+        "terceira": 3,
+        "terceiro": 3,
+        "3ª": 3,
+        "3a": 3,
+        "3º": 3,
+        "quarta": 4,
+        "quarto": 4,
+        "4ª": 4,
+        "4a": 4,
+        "4º": 4,
+        "quinta": 5,
+        "quinto": 5,
+        "5ª": 5,
+        "5a": 5,
+        "5º": 5,
+    }
+
+    user_messages = []
+    for msg in history:
+        if _message_role(msg) != "user":
+            continue
+
+        content = _message_content(msg).strip()
+        if not content:
+            continue
+
+        if _is_pmcf_generation_command(content):
+            continue
+
+        user_messages.append(content)
+
+    for word, position in ordinal_map.items():
+        if word in t:
+            idx = position - 1
+            if 0 <= idx < len(user_messages):
+                return user_messages[idx]
+
+    if "última" in t or "ultima" in t or "último" in t or "ultimo" in t:
+        return user_messages[-1] if user_messages else None
+
+    return None
 
 
 def _resolve_regulatory_description(
     description: str,
-    history: Optional[List[ConversationMessage]],
+    history: Optional[List[Any]],
 ) -> str:
     cleaned = (description or "").strip()
+
+    referenced = _extract_referenced_user_message(cleaned, history)
+    if referenced:
+        return referenced
 
     if cleaned and not _is_pmcf_generation_command(cleaned):
         return cleaned
 
     if history:
         for msg in reversed(history):
-            if msg.role != "user":
+            if _message_role(msg) != "user":
                 continue
 
-            content = (msg.content or "").strip()
+            content = _message_content(msg).strip()
             if not content:
                 continue
 
@@ -616,6 +733,80 @@ def _resolve_regulatory_description(
                 return content
 
     return cleaned
+
+
+
+def _history_dicts_to_messages(
+    history: Optional[List[Dict[str, str]]],
+) -> List[ConversationMessage]:
+    if not history:
+        return []
+
+    out: List[ConversationMessage] = []
+
+    for item in history:
+        try:
+            out.append(ConversationMessage(**item))
+        except Exception:
+            continue
+
+    return out
+
+
+def _generate_pmcf_from_chat_command(
+    payload: QuestionRequest,
+    user: AuthUser,
+) -> Dict[str, Any]:
+    history_messages = _history_dicts_to_messages(payload.history or [])
+
+    resolved_description = _resolve_regulatory_description(
+        payload.question,
+        history_messages,
+    )
+
+    if not resolved_description or _is_pmcf_generation_command(resolved_description):
+        raise ValueError(
+            "Para gerar o Plano PMCF preciso de uma descrição anterior do dispositivo. "
+            "Descreve primeiro o dispositivo ou faz a análise regulatória inicial."
+        )
+
+    analysis_result = analyze_device(
+        session_id=None,
+        description=resolved_description,
+    )
+
+    session_id = analysis_result["session_id"]
+
+    # Gera já o documento, preenchendo o que conseguir e marcando o resto para revisão manual.
+    doc_result = skip_remaining_and_generate(session_id)
+
+    answer = (
+        f"{doc_result.get('assistant_text', '')}\n\n"
+        f"Link de download: {doc_result.get('download_url')}\n"
+        f"Ficheiro: {doc_result.get('download_name')}"
+    ).strip()
+
+    try:
+        log_regulatory_document_trace(
+            user_id=user.id,
+            conversation_id=payload.conversation_id,
+            session_id=session_id,
+            step=doc_result.get("step", ""),
+            assistant_text=answer,
+            download_name=doc_result.get("download_name"),
+            filled_fields=doc_result.get("filled_fields", []),
+            flagged_fields=doc_result.get("flagged_fields", []),
+        )
+    except Exception:
+        pass
+
+    return {
+        "intent": "document_generation",
+        "target_docs": ["MDR"],
+        "retrieved_sources": [],
+        "generation_sources": [],
+        "answer": answer,
+    }
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -791,6 +982,9 @@ def chat_endpoint(
     user: AuthUser = Depends(require_chatbot_access),
 ) -> ChatResponse:
     try:
+        if _is_pmcf_generation_command(payload.question):
+            return _generate_pmcf_from_chat_command(payload, user)
+        
         result = answer_question(
             payload.question,
             history=payload.history or [],

@@ -396,6 +396,30 @@ def _split_step1_response(raw: str) -> Tuple[str, Dict[str, Any]]:
 def _seed_collected_from_analysis(session: RegulatorySession) -> None:
     """Copia os campos derivados automaticamente da análise para os recolhidos."""
     s = session.analysis_structured
+    desc = (session.device_description or "").lower()
+
+    product_class_rule = s.get("product_class_rule")
+
+    if not product_class_rule:
+        mdr_class = s.get("mdr_class")
+        mdr_rule = s.get("mdr_rule")
+        if mdr_class and mdr_rule:
+            product_class_rule = f"Classe {mdr_class} ({mdr_rule})"
+
+    # fallback específico para termómetro ativo de monitorização clínica
+    if not product_class_rule:
+        if (
+            ("termómetro" in desc or "termometro" in desc)
+            and ("ativo" in desc or "digital" in desc)
+            and (
+                "monitorização" in desc
+                or "monitorizacao" in desc
+                or "sinais vitais" in desc
+                or "temperatura corporal" in desc
+            )
+        ):
+            product_class_rule = "Classe IIa provável (Regra 10 do Anexo VIII do MDR) — a confirmar conforme finalidade prevista e criticidade da monitorização."
+
     mapping = {
         "intended_purpose": s.get("intended_purpose"),
         "intended_users": s.get("intended_users"),
@@ -403,7 +427,7 @@ def _seed_collected_from_analysis(session: RegulatorySession) -> None:
         "medical_indication": s.get("medical_indication"),
         "contraindications": s.get("contraindications"),
         "product_name": s.get("product_name"),
-        "product_class_rule": s.get("product_class_rule"),
+        "product_class_rule": product_class_rule,
         "expected_lifetime": s.get("expected_lifetime"),
         "novel_product": s.get("novel_product"),
         "novel_procedure": s.get("novel_procedure"),
@@ -411,8 +435,16 @@ def _seed_collected_from_analysis(session: RegulatorySession) -> None:
         "pmcf_objectives": s.get("pmcf_objectives"),
         "pmcf_methods": s.get("pmcf_methods"),
     }
+
     for key, val in mapping.items():
-        if val and str(val).strip() and str(val).strip().lower() not in {"a confirmar pelo fabricante", "a confirmar"}:
+        if val and str(val).strip() and str(val).strip().lower() not in {
+            "a confirmar pelo fabricante",
+            "a confirmar",
+            "não determinado",
+            "nao determinado",
+            "não aplicável",
+            "nao aplicavel",
+        }:
             session.collected[key] = str(val).strip()
 
 

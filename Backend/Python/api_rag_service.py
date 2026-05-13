@@ -24,12 +24,21 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import numpy as np
 
 import ollama
 from dotenv import load_dotenv
 
-from rag_router_utils import build_context
-from rag_retrieval_service import retrieve_sources
+from rag_router_utils import (
+    analyze_question,
+    build_context,
+    build_query_variants,
+    validate_embeddings_payload,
+    retrieve_relevant_indices,
+    adjust_score,
+    select_relevant_indices,
+)
+from rag_chromadb_service import query_chroma, chroma_has_documents
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +55,7 @@ ENV_PATH = PROJECT_ROOT / "Backend" / ".env"
 
 load_dotenv(dotenv_path=ENV_PATH)
 
+VECTOR_STORE = os.getenv("VECTOR_STORE", "pickle").strip().lower()
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL")
 OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL")
 EMBEDDINGS_PATH = (
@@ -87,6 +97,9 @@ Regras obrigatórias:
 - Nunca alteres os nomes nem os números oficiais dos regulamentos principais fornecidos no prompt.
 - Nunca cries novos regulamentos, novos números de regulamento, nem placeholders como XXX ou YYY.
 - Não uses conhecimento externo ao contexto.
+- Nunca cites como "FONTE 1", "FONTE 2" ou semelhante.
+- Usa sempre o valor do campo "Citação:" da fonte, por exemplo "MDR Artigo 10" ou "AI_ACT Artigo 6".
+- Se não souberes a citação exata, não cites essa fonte.
 """
 
 
@@ -105,25 +118,62 @@ Objetivo da resposta:
   3. Pontos principais a ter em conta já no início
   4. Limitações / informação adicional necessária
   5. Citações usadas
+- Se o produto for software médico com IA, considera MDR e AI Act quando ambos estiverem nos documentos-alvo.
 """,
+
     "requirement_lookup": """
 Objetivo da resposta:
 - Dar uma resposta curta e direta.
 - Depois explicar apenas o que as fontes sustentam.
 """,
+
+"manufacturer_obligations": """
+Objetivo da resposta:
+- Responder especificamente sobre obrigações do fabricante segundo o MDR.
+- Priorizar MDR Artigo 10 como fonte principal.
+- Usar outros artigos/anexos apenas quando forem obrigações reais do fabricante.
+- Não listar obrigações de organismos notificados como se fossem obrigações do fabricante.
+- Não listar atribuições do MDCG, Comissão ou autoridades competentes como obrigações do fabricante.
+- Não usar Anexo VII, Artigo 55, Artigo 57, Artigo 105, Artigo 106 ou Artigo 107 como fontes para obrigações do fabricante.
+- Se o utilizador pedir uma lista numerada, entregar uma lista numerada clara.
+- Cada obrigação listada tem de estar sustentada pela própria fonte citada nessa linha.
+- Não uses uma citação global única no fim para sustentar uma lista inteira.
+- Se listares obrigações, cita cada obrigação individualmente.
+""",
+
     "conformity_procedure": """
 Objetivo da resposta:
 - Explicar o procedimento de forma estruturada por passos.
+- Priorizar Artigo 52 e Anexos IX, X e XI do MDR quando disponíveis.
+- Não transformar perguntas de documentação em classificação de risco.
 """,
+
     "documentation": """
 Objetivo da resposta:
 - Organizar a resposta por tipos de documentação.
+- Priorizar MDR Anexo II, Anexo III, Artigo 10, Artigo 61 e Anexo XIV quando disponíveis.
+- Não uses regras de classificação como fonte principal, exceto para explicar que a documentação depende da classe.
+- Se faltarem detalhes do dispositivo, lista os campos a confirmar.
 """,
+
+    "document_generation": """
+Objetivo da resposta:
+- Gerar diretamente um documento estruturado e utilizável.
+- O documento deve ser adaptado ao dispositivo/contexto indicado pelo utilizador e pelo histórico.
+- Se faltar informação, usa "A confirmar" ou "Preencher manualmente"; não inventes.
+- Para PMCF/PMS/documentação técnica, usa uma estrutura profissional.
+- Não transformes a resposta numa explicação genérica de avaliação da conformidade.
+- Não uses regras de classificação como corpo principal do documento; usa-as apenas para contextualizar a classe quando necessário.
+""",
+
     "classification_risk": """
 Objetivo da resposta:
-- Identificar primeiro a base normativa concreta (artigo, anexo, regra ou ponto).
-- Só depois explicar o que essa base permite concluir.
-- Não fechar uma classe de risco sem base suficiente.
+- Identificar primeiro a base normativa concreta: MDR Artigo 51, MDR Anexo VIII e a Regra/Ponto aplicável.
+- Se uma regra concreta do Anexo VIII estiver no contexto, aplica essa regra ao caso descrito.
+- Se houver base suficiente, indica a classe provável.
+- Se a classificação depender de características ainda não confirmadas, indica a classe provável e lista as condições que têm de ser confirmadas.
+- Não digas apenas que falta informação se o contexto contiver uma regra aplicável clara.
+- Não uses fontes sobre declaração UE de conformidade, avaliação da conformidade ou anexos que não sejam o Anexo VIII para decidir a classe.
 """,
 }
 
@@ -134,12 +184,205 @@ Objetivo da resposta:
 # Nem sempre convém enviar demasiadas fontes ao modelo. Este controlo evita
 # prompts desnecessariamente grandes e ajuda a manter foco.
 GENERATION_MAX_ITEMS_BY_INTENT = {
-    "regulatory_scope": 6,
+    "regulatory_scope": 8,
     "requirement_lookup": 6,
     "conformity_procedure": 8,
     "documentation": 8,
+    "document_generation": 8,
     "classification_risk": 6,
+    "manufacturer_obligations": 8,
 }
+
+
+def embed_query_text(text: str) -> List[float]:
+    """
+    Gera embedding para uma pergunta usando o modelo configurado no Ollama.
+    """
+    if not OLLAMA_EMBED_MODEL:
+        raise ValueError("Falta OLLAMA_EMBED_MODEL no .env")
+
+    response = ollama.embeddings(
+        model=OLLAMA_EMBED_MODEL,
+        prompt=text,
+    )
+    return response["embedding"]
+
+
+def extract_chunk_text_from_chroma_document(document: str) -> str:
+    """
+    Extrai apenas o conteúdo real do chunk a partir do documento serializado no Chroma.
+    """
+    if not document:
+        return ""
+
+    marker = "Texto:"
+    if marker in document:
+        return document.split(marker, 1)[1].strip()
+
+    return document.strip()
+
+
+def chroma_results_to_records(
+    query_result: Dict[str, Any],
+    *,
+    original_question: str,
+    plan: Dict[str, Any],
+) -> tuple[list[dict], list[float], list[float]]:
+    """
+    Converte resultados do Chroma para o formato do pipeline antigo.
+
+    Devolve:
+    - records
+    - base_scores
+    - adjusted_scores
+
+    Notas:
+    - O Chroma devolve distância: menor é melhor.
+    - Convertimos para base_score com 1 / (1 + distance).
+    - Depois aplicamos adjust_score(), o mesmo reranking usado no pickle.
+    - O build_context() precisa de 'chunk_text', não apenas 'text'.
+    """
+    metadatas = (query_result.get("metadatas") or [[]])[0]
+    documents = (query_result.get("documents") or [[]])[0]
+    distances = (query_result.get("distances") or [[]])[0]
+    ids = (query_result.get("ids") or [[]])[0]
+
+    records: List[Dict[str, Any]] = []
+    base_scores: List[float] = []
+    adjusted_scores: List[float] = []
+
+    def clean_page(value):
+        try:
+            if value in (None, "", -1, "-1"):
+                return None
+            return int(value)
+        except Exception:
+            return None
+
+    for i, meta in enumerate(metadatas):
+        meta = meta or {}
+
+        document = documents[i] if i < len(documents) else ""
+        distance = float(distances[i]) if i < len(distances) else 999.0
+
+        # menor distância = melhor score
+        base_score = 1.0 / (1.0 + max(0.0, distance))
+
+        chunk_text = extract_chunk_text_from_chroma_document(document)
+
+        record = {
+            "chunk_id": ids[i] if i < len(ids) else meta.get("chunk_id", i),
+            "citation_label": str(meta.get("citation_label", "") or ""),
+            "short_name": str(meta.get("short_name", "") or ""),
+            "section_type": str(meta.get("section_type", "") or "").lower(),
+            "section_number": str(meta.get("section_number", "") or ""),
+            "section_title": str(meta.get("section_title", "") or ""),
+            "page_start": clean_page(meta.get("page_start")),
+            "page_end": clean_page(meta.get("page_end")),
+            "chunk_text": chunk_text,
+            "text": chunk_text,
+        }
+
+        adjusted_score = adjust_score(
+            base_score=float(base_score),
+            record=record,
+            plan=plan,
+            question=original_question,
+        )
+
+        records.append(record)
+        base_scores.append(float(base_score))
+        adjusted_scores.append(float(adjusted_score))
+
+    return records, base_scores, adjusted_scores
+
+
+
+def merge_chroma_candidates(
+    query_results: List[Dict[str, Any]],
+    *,
+    original_question: str,
+    plan: Dict[str, Any],
+) -> tuple[List[Dict[str, Any]], List[float], List[float], List[int]]:
+    """
+    Junta resultados de várias queries Chroma, deduplica e ordena por adjusted_score.
+
+    Deduplicação:
+    - usa citação + secção + início do texto
+    - evita duplicados iguais vindos de várias query variants
+    """
+    merged_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for result in query_results:
+        records, base_scores, adjusted_scores = chroma_results_to_records(
+            result,
+            original_question=original_question,
+            plan=plan,
+        )
+
+        for record, base_score, adjusted_score in zip(records, base_scores, adjusted_scores):
+            citation = (record.get("citation_label") or "").strip()
+            section_number = (record.get("section_number") or "").strip()
+            section_title = (record.get("section_title") or "").strip()
+            text_head = (record.get("chunk_text") or "")[:180].strip()
+
+            key = f"{citation}::{section_number}::{section_title}::{text_head}"
+
+            prev = merged_by_key.get(key)
+            if prev is None or adjusted_score > prev["adjusted_score"]:
+                merged_by_key[key] = {
+                    "record": record,
+                    "base_score": float(base_score),
+                    "adjusted_score": float(adjusted_score),
+                }
+
+    merged = list(merged_by_key.values())
+    merged.sort(key=lambda x: x["adjusted_score"], reverse=True)
+
+    records = [x["record"] for x in merged]
+    base_scores = [x["base_score"] for x in merged]
+    adjusted_scores = [x["adjusted_score"] for x in merged]
+
+    # Como já vem ordenado, estes índices representam o ranking final.
+    selected_indices = list(range(len(records)))
+
+    return records, base_scores, adjusted_scores, selected_indices
+
+
+
+def query_chroma_with_variants(
+    question: str,
+    plan: Dict[str, Any],
+    n_results_per_query: int = 10,
+) -> tuple[List[Dict[str, Any]], List[float], List[float], List[int]]:
+    """
+    Faz retrieval no Chroma usando query original + query variants, com filtro opcional
+    por documentos-alvo.
+    """
+    queries = build_query_variants(question, plan)
+    query_results = []
+
+    where = None
+    target_docs = plan.get("target_docs") or []
+    if len(target_docs) == 1:
+        where = {"short_name": target_docs[0]}
+    elif len(target_docs) > 1:
+        where = {"short_name": {"$in": target_docs}}
+
+    for q in queries:
+        query_embedding = embed_query_text(q)
+        result = query_chroma(
+            query_embedding=query_embedding,
+            n_results=n_results_per_query,
+            where=where,
+        )
+        query_results.append(result)
+
+    return merge_chroma_candidates(
+        query_results,
+        original_question=question,
+        plan=plan,
+    )
 
 
 def get_system_prompt(intent: str) -> str:
@@ -301,6 +544,164 @@ def specificity_rank(record: Dict[str, Any]) -> int:
     return 0
 
 
+def is_mdr_classification_source(record: Dict[str, Any]) -> bool:
+    """
+    Só aceita fontes realmente úteis para classificação MDR.
+    Evita anexos/procedimentos que não classificam o dispositivo.
+    """
+    if record.get("short_name") != "MDR":
+        return False
+
+    text = normalized_source_text(record)
+    section_type = (record.get("section_type") or "").lower()
+
+    # Fontes nucleares
+    if "artigo 51" in text or "classificação dos dispositivos" in text:
+        return True
+
+    if "anexo viii" in text or "regras de classificação" in text:
+        return True
+
+    # Regras/pontos concretos
+    if section_type in {"rule", "point"} and "regra" in text:
+        return True
+
+    # Evitar capítulos genéricos
+    if section_type == "chapter":
+        return False
+
+    return False
+
+
+def classification_source_priority(record: Dict[str, Any]) -> int:
+    """
+    Prioridade normativa para geração em perguntas de classificação.
+    """
+    text = normalized_source_text(record)
+    section_type = (record.get("section_type") or "").lower()
+
+    if "regra" in text and section_type in {"rule", "point"}:
+        return 100
+
+    if "regra" in text:
+        return 90
+
+    if "anexo viii" in text:
+        return 80
+
+    if "artigo 51" in text:
+        return 70
+
+    if "classificação dos dispositivos" in text:
+        return 65
+
+    return 0
+
+
+def is_bad_manufacturer_obligations_source(record: Dict[str, Any]) -> bool:
+    """
+    Remove fontes que não devem sustentar obrigações do fabricante.
+    """
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    if record.get("short_name") != "MDR":
+        return True
+
+    section_type = (record.get("section_type") or "").lower()
+
+    if section_type in {"recital", "preamble", "document"}:
+        return True
+
+    bad_patterns = [
+        "anexo vii",
+        "organismos notificados",
+        "organismo notificado",
+        "requisitos a cumprir pelos organismos notificados",
+        "artigo 55",
+        "mecanismo de escrutínio",
+        "mecanismo de escrutinio",
+        "artigo 57",
+        "sistema eletrónico relativo aos organismos notificados",
+        "sistema eletronico relativo aos organismos notificados",
+        "anexo xiii",
+        "dispositivos feitos por medida",
+        "procedimento aplicável aos dispositivos feitos por medida",
+        "procedimento aplicavel aos dispositivos feitos por medida",
+        "capítulo v",
+        "capitulo v",
+        "classificação e avaliação da conformidade",
+        "classificacao e avaliacao da conformidade",
+    ]
+
+    return any(p in text for p in bad_patterns)
+
+
+def is_good_manufacturer_obligations_source(record: Dict[str, Any]) -> bool:
+    """
+    Mantém fontes úteis para obrigações do fabricante no MDR.
+    """
+    if record.get("short_name") != "MDR":
+        return False
+
+    if is_bad_manufacturer_obligations_source(record):
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    good_patterns = [
+        "artigo 10",
+        "obrigações gerais dos fabricantes",
+        "obrigacoes gerais dos fabricantes",
+        "artigo 15",
+        "pessoa responsável pela observância da regulamentação",
+        "pessoa responsavel pela observancia da regulamentacao",
+        "artigo 19",
+        "declaração ue de conformidade",
+        "declaracao ue de conformidade",
+        "artigo 20",
+        "marcação ce",
+        "marcacao ce",
+        "artigo 27",
+        "udi",
+        "identificação única do dispositivo",
+        "identificacao unica do dispositivo",
+        "artigo 29",
+        "registo dos dispositivos",
+        "artigo 31",
+        "registo dos fabricantes",
+        "artigo 61",
+        "avaliação clínica",
+        "avaliacao clinica",
+        "artigo 83",
+        "vigilância pós-comercialização",
+        "vigilancia pos-comercializacao",
+        "artigo 84",
+        "plano de vigilância pós-comercialização",
+        "plano de vigilancia pos-comercializacao",
+        "artigo 86",
+        "relatório periódico de segurança",
+        "relatorio periodico de seguranca",
+        "anexo i",
+        "requisitos gerais de segurança e desempenho",
+        "requisitos gerais de seguranca e desempenho",
+        "anexo ii",
+        "documentação técnica",
+        "documentacao tecnica",
+        "anexo iii",
+        "documentação técnica relativa à vigilância",
+        "documentacao tecnica relativa a vigilancia",
+    ]
+
+    return any(p in text for p in good_patterns)
+
 def select_generation_indices(
     selected_indices: List[int],
     records: List[Dict[str, Any]],
@@ -308,36 +709,14 @@ def select_generation_indices(
     plan: Dict[str, Any],
 ) -> List[int]:
     """
-    Seleciona o subconjunto de fontes que será enviado ao modelo para geração.
+    Seleciona as fontes efetivamente enviadas ao modelo para geração.
 
-    Esta função recebe as fontes já recuperadas na fase de retrieval e aplica
-    uma seleção adicional orientada para geração de resposta, tentando equilibrar:
-    - relevância;
-    - especificidade;
-    - diversidade de fontes;
-    - cobertura de artigos/anexos importantes para o tipo de pergunta.
-
-    Estratégia geral:
-    - ordenar fontes por especificidade e score;
-    - deduplicar;
-    - forçar algumas fontes-chave por intenção;
-    - limitar o número final de fontes;
-    - remover fontes conhecidas como menos adequadas em certos casos
-      (por exemplo Anexo VI quando se queria Anexo VIII).
-
-    Args:
-        selected_indices:
-            Índices das fontes recuperadas no retrieval.
-        records:
-            Todos os registos disponíveis.
-        adjusted_scores:
-            Scores ajustados atribuídos no ranking.
-        plan:
-            Plano de retrieval, contendo intenção e documentos-alvo.
-
-    Returns:
-        List[int]:
-            Lista final de índices a usar na construção do contexto de geração.
+    Melhorias desta versão:
+    - favorece fontes específicas em vez de capítulos genéricos;
+    - para classificação MDR, força Artigo 51 + Anexo VIII + regras relevantes;
+    - para termómetro / não invasivo, tenta puxar Regra 1 e fontes sobre dispositivos não invasivos;
+    - evita fontes pouco úteis em classificação, como Anexo IV, Anexo VI e Declaração UE de Conformidade;
+    - mantém deduplicação por citação/chunk.
     """
     if not selected_indices:
         return []
@@ -346,10 +725,182 @@ def select_generation_indices(
     target_docs = plan.get("target_docs", [])
     max_items = GENERATION_MAX_ITEMS_BY_INTENT.get(intent, 6)
 
-    # Ordena primeiro por especificidade normativa e depois por score ajustado.
+    def source_text(idx: int) -> str:
+        r = records[idx]
+        return normalized_source_text(r) + " " + str(r.get("chunk_text", "") or "").lower()
+
+    def is_bad_for_classification(idx: int) -> bool:
+        return is_bad_classification_source(records[idx])
+    
+    
+        
+
+    def priority(idx: int) -> tuple:
+        r = records[idx]
+        text = source_text(idx)
+        section_type = (r.get("section_type") or "").lower()
+        short_name = r.get("short_name")
+
+        score = float(adjusted_scores[idx])
+        p = 0.0
+
+        # Documento-alvo
+        if target_docs:
+            p += 0.20 if short_name in target_docs else -0.20
+
+        # Especificidade normativa
+        if section_type == "rule":
+            p += 0.45
+        elif section_type == "point":
+            p += 0.35
+        elif section_type == "article":
+            p += 0.25
+        elif section_type == "annex":
+            p += 0.15
+        elif section_type == "chapter":
+            p -= 0.10
+
+        if intent == "classification_risk":
+            if "artigo 51" in text or "classificação dos dispositivos" in text or "classificacao dos dispositivos" in text:
+                p += 0.50
+
+            if "anexo viii" in text or "regras de classificação" in text or "regras de classificacao" in text:
+                p += 0.55
+
+            if "regra 1" in text:
+                p += 0.75
+
+            if "regra 2" in text or "regra 3" in text or "regra 4" in text:
+                p += 0.35
+
+            if "não invasivo" in text or "nao invasivo" in text:
+                p += 0.65
+
+            if "medição" in text or "medicao" in text or "temperatura" in text or "termómetro" in text or "termometro" in text:
+                p += 0.35
+
+            if is_bad_for_classification(idx):
+                p -= 1.50
+
+        
+        elif intent == "manufacturer_obligations":
+            if "artigo 10" in text or "obrigações gerais dos fabricantes" in text or "obrigacoes gerais dos fabricantes" in text:
+                p += 0.90
+
+            if "artigo 15" in text or "pessoa responsável pela observância" in text or "pessoa responsavel pela observancia" in text:
+                p += 0.35
+
+            if "artigo 19" in text or "declaração ue de conformidade" in text or "declaracao ue de conformidade" in text:
+                p += 0.30
+
+            if "artigo 20" in text or "marcação ce" in text or "marcacao ce" in text:
+                p += 0.30
+
+            if "artigo 27" in text or "udi" in text:
+                p += 0.25
+
+            if "artigo 29" in text or "registo dos dispositivos" in text:
+                p += 0.25
+
+            if "artigo 31" in text or "registo dos fabricantes" in text:
+                p += 0.25
+
+            if "artigo 61" in text or "avaliação clínica" in text or "avaliacao clinica" in text:
+                p += 0.30
+
+            if "artigo 83" in text or "vigilância pós-comercialização" in text or "vigilancia pos-comercializacao" in text:
+                p += 0.30
+
+            if "artigo 84" in text or "plano de vigilância" in text or "plano de vigilancia" in text:
+                p += 0.25
+
+            if "artigo 86" in text or "relatório periódico de segurança" in text or "relatorio periodico de seguranca" in text:
+                p += 0.20
+
+            if "anexo i" in text or "requisitos gerais de segurança e desempenho" in text or "requisitos gerais de seguranca e desempenho" in text:
+                p += 0.25
+
+            if "anexo ii" in text or "documentação técnica" in text or "documentacao tecnica" in text:
+                p += 0.30
+
+            if "anexo iii" in text or "vigilância pós-comercialização" in text or "vigilancia pos-comercializacao" in text:
+                p += 0.25
+
+            if is_bad_manufacturer_obligations_source(r):
+                p -= 2.00
+        
+        elif intent == "regulatory_scope":
+            if short_name == "MDR":
+                if "artigo 5" in text or "colocação no mercado" in text or "colocacao no mercado" in text:
+                    p += 0.45
+                if "artigo 10" in text or "obrigações gerais dos fabricantes" in text or "obrigacoes gerais dos fabricantes" in text:
+                    p += 0.50
+                if "anexo i" in text or "requisitos gerais de segurança e desempenho" in text or "requisitos gerais de seguranca e desempenho" in text:
+                    p += 0.35
+                if "anexo ii" in text or "documentação técnica" in text or "documentacao tecnica" in text:
+                    p += 0.30
+
+            if short_name == "AI_ACT":
+                if "artigo 6" in text or "alto risco" in text:
+                    p += 0.45
+                if "artigo 16" in text or "obrigações dos prestadores" in text or "obrigacoes dos prestadores" in text:
+                    p += 0.40
+                if "artigo 25" in text or "fabricantes de produtos" in text:
+                    p += 0.35
+                if "artigo 43" in text or "avaliação da conformidade" in text or "avaliacao da conformidade" in text:
+                    p += 0.30
+
+        elif intent in {"documentation", "document_generation"}:
+            if "anexo ii" in text or "documentação técnica" in text or "documentacao tecnica" in text:
+                p += 0.60
+
+            if "anexo iii" in text or "vigilância pós-comercialização" in text or "vigilancia pos-comercializacao" in text:
+                p += 0.50
+
+            if "artigo 10" in text or "obrigações gerais dos fabricantes" in text or "obrigacoes gerais dos fabricantes" in text:
+                p += 0.35
+
+            if "artigo 61" in text or "avaliação clínica" in text or "avaliacao clinica" in text:
+                p += 0.45
+
+            if "anexo xiv" in text or "pmcf" in text or "acompanhamento clínico pós-comercialização" in text or "acompanhamento clinico pos-comercializacao" in text:
+                p += 0.55
+
+            if section_type == "rule":
+                p -= 0.35
+
+            if "regras de classificação" in text or "regras de classificacao" in text:
+                p -= 0.30
+
+        elif intent == "conformity_procedure":
+            if "artigo 52" in text or "avaliação da conformidade" in text or "avaliacao da conformidade" in text:
+                p += 0.55
+            if "anexo ix" in text or "anexo x" in text or "anexo xi" in text:
+                p += 0.45
+            if "organismo notificado" in text:
+                p += 0.35
+
+        def local_specificity_rank(record: Dict[str, Any]) -> int:
+            section_type = (record.get("section_type") or "").lower()
+
+            if section_type == "rule":
+                return 5
+            if section_type == "point":
+                return 4
+            if section_type == "article":
+                return 3
+            if section_type == "annex":
+                return 2
+            if section_type == "chapter":
+                return 1
+
+            return 0
+
+        return (p + score, local_specificity_rank(r), score)
+
     ranked = sorted(
         selected_indices,
-        key=lambda i: (specificity_rank(records[i]), adjusted_scores[i]),
+        key=priority,
         reverse=True,
     )
 
@@ -357,144 +908,172 @@ def select_generation_indices(
     used_keys = set()
 
     def add_idx(idx: int) -> bool:
-        """
-        Adiciona um índice à lista final se ainda não tiver sido usado.
+        r = records[idx]
+        key = citation_key(r)
 
-        Args:
-            idx:
-                Índice da fonte a adicionar.
-
-        Returns:
-            bool:
-                True se a fonte foi adicionada; False se já existia.
-        """
-        key = citation_key(records[idx])
         if key in used_keys:
             return False
+
+        if intent == "classification_risk":
+            if is_bad_for_classification(idx):
+                return False
+            if not is_good_classification_source(r):
+                return False
+
+        if intent == "manufacturer_obligations":
+            if is_bad_manufacturer_obligations_source(r):
+                return False
+            if not is_good_manufacturer_obligations_source(r):
+                return False
+        
+        
+        if intent == "regulatory_scope":
+            if is_bad_regulatory_scope_source(r):
+                return False
+            if not is_good_regulatory_scope_source(r):
+                return False
+
         chosen.append(idx)
         used_keys.add(key)
         return True
 
-    # -----------------------------------------------------------------------
-    # Regras especiais para perguntas sobre enquadramento regulatório
-    # -----------------------------------------------------------------------
-    if intent == "regulatory_scope":
-        if target_docs == ["MDR"]:
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "MDR",
-                    lambda r: "artigo 5" in normalized_source_text(r) or
-                              "colocação no mercado" in normalized_source_text(r),
-                ],
-            )
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "MDR",
-                    lambda r: "artigo 10" in normalized_source_text(r) or
-                              "obrigações gerais dos fabricantes" in normalized_source_text(r),
-                ],
-            )
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "MDR",
-                    lambda r: "anexo i" in normalized_source_text(r) or
-                              "requisitos gerais de segurança e desempenho" in normalized_source_text(r),
-                ],
-            )
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "MDR",
-                    lambda r: "anexo ii" in normalized_source_text(r) or
-                              "documentação técnica" in normalized_source_text(r),
-                ],
-            )
+    def add_best_match(conditions) -> bool:
+        for idx in ranked:
+            r = records[idx]
+            text = source_text(idx)
+            if all(cond(r, text) for cond in conditions):
+                return add_idx(idx)
+        return False
 
-        elif target_docs == ["MDR", "AI_ACT"]:
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "MDR",
-                    lambda r: "artigo 5" in normalized_source_text(r) or
-                              "colocação no mercado" in normalized_source_text(r),
-                ],
-            )
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "MDR",
-                    lambda r: "artigo 10" in normalized_source_text(r) or
-                              "obrigações gerais dos fabricantes" in normalized_source_text(r),
-                ],
-            )
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "AI_ACT",
-                    lambda r: "artigo 6" in normalized_source_text(r) or
-                              "alto risco" in normalized_source_text(r),
-                ],
-            )
-            try_add_best_match(
-                chosen, used_keys, ranked, records,
-                [
-                    lambda r: r.get("short_name") == "AI_ACT",
-                    lambda r: "artigo 16" in normalized_source_text(r) or
-                              "obrigações dos prestadores" in normalized_source_text(r),
-                ],
-            )
-
+    
+    
     # -----------------------------------------------------------------------
-    # Regras especiais para perguntas sobre classificação/risco
+    # Obrigações do fabricante MDR — fontes nucleares
+    # -----------------------------------------------------------------------
+    if intent == "manufacturer_obligations":
+        for wanted in [
+            "artigo 10",
+            "artigo 15",
+            "artigo 19",
+            "artigo 20",
+            "artigo 27",
+            "artigo 29",
+            "artigo 31",
+            "artigo 61",
+            "artigo 83",
+            "artigo 84",
+            "artigo 86",
+            "anexo i",
+            "anexo ii",
+            "anexo iii",
+        ]:
+            add_best_match([
+                lambda r, text, wanted=wanted: r.get("short_name") == "MDR",
+                lambda r, text, wanted=wanted: wanted in text,
+            ])
+    
+    
+    # -----------------------------------------------------------------------
+    # Classificação MDR — fontes nucleares
     # -----------------------------------------------------------------------
     elif intent == "classification_risk":
-        try_add_best_match(
-            chosen, used_keys, ranked, records,
-            [
-                lambda r: r.get("short_name") == "MDR",
-                lambda r: "artigo 51" in normalized_source_text(r) or
-                          "classificação dos dispositivos" in normalized_source_text(r),
-            ],
-        )
-        try_add_best_match(
-            chosen, used_keys, ranked, records,
-            [
-                lambda r: r.get("short_name") == "MDR",
-                lambda r: "anexo viii" in normalized_source_text(r) or
-                          "regras de classificação" in normalized_source_text(r),
-            ],
-        )
-        try_add_best_match(
-            chosen, used_keys, ranked, records,
-            [
-                lambda r: r.get("short_name") == "MDR",
-                lambda r: "regra" in normalized_source_text(r),
-            ],
-        )
+        # Base legal geral da classificação
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "artigo 51" in text or "classificação dos dispositivos" in text or "classificacao dos dispositivos" in text,
+        ])
 
-    # Completa a lista final até ao limite máximo.
+        # Anexo VIII — regras de classificação
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "anexo viii" in text and ("regras de classificação" in text or "regras de classificacao" in text),
+        ])
+
+        # Regra 1 / dispositivos não invasivos
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "regra 1" in text or "não invasivo" in text or "nao invasivo" in text,
+        ])
+
+        # Caso haja uma regra sobre medição/temperatura, também é útil
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "medição" in text or "medicao" in text or "temperatura" in text or "termómetro" in text or "termometro" in text,
+        ])
+
+    # -----------------------------------------------------------------------
+    # Âmbito regulatório — fontes nucleares
+    # -----------------------------------------------------------------------
+    elif intent == "regulatory_scope":
+        if "MDR" in target_docs:
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: "artigo 5" in text or "colocação no mercado" in text or "colocacao no mercado" in text,
+            ])
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: "artigo 10" in text or "obrigações gerais dos fabricantes" in text or "obrigacoes gerais dos fabricantes" in text,
+            ])
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: "anexo i" in text or "requisitos gerais de segurança e desempenho" in text or "requisitos gerais de seguranca e desempenho" in text,
+            ])
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: "anexo ii" in text or "documentação técnica" in text or "documentacao tecnica" in text,
+            ])
+
+        if "AI_ACT" in target_docs:
+            add_best_match([
+                lambda r, text: r.get("short_name") == "AI_ACT",
+                lambda r, text: "artigo 6" in text or "alto risco" in text,
+            ])
+            add_best_match([
+                lambda r, text: r.get("short_name") == "AI_ACT",
+                lambda r, text: "artigo 16" in text or "obrigações dos prestadores" in text or "obrigacoes dos prestadores" in text,
+            ])
+            add_best_match([
+                lambda r, text: r.get("short_name") == "AI_ACT",
+                lambda r, text: "artigo 25" in text or "fabricantes de produtos" in text,
+            ])
+            
+            
+    # -----------------------------------------------------------------------
+    # Documentação / geração documental — fontes nucleares
+    # -----------------------------------------------------------------------
+    elif intent in {"documentation", "document_generation"}:
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "anexo ii" in text or "documentação técnica" in text or "documentacao tecnica" in text,
+        ])
+
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "anexo iii" in text or "vigilância pós-comercialização" in text or "vigilancia pos-comercializacao" in text,
+        ])
+
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "artigo 10" in text or "obrigações gerais dos fabricantes" in text or "obrigacoes gerais dos fabricantes" in text,
+        ])
+
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "artigo 61" in text or "avaliação clínica" in text or "avaliacao clinica" in text,
+        ])
+
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "anexo xiv" in text or "pmcf" in text or "acompanhamento clínico pós-comercialização" in text or "acompanhamento clinico pos-comercializacao" in text,
+        ])
+
+    # Completar com os melhores restantes
     for idx in ranked:
         if len(chosen) >= max_items:
             break
         add_idx(idx)
 
-    # Filtra uma ambiguidade concreta: evita "Anexo VI" quando se pretendia
-    # frequentemente "Anexo VIII" no contexto de classificação.
-    filtered = []
-    for idx in chosen:
-        r = records[idx]
-        text = normalized_source_text(r)
-
-        if "anexo vi" in text and "anexo viii" not in text:
-            continue
-
-        filtered.append(idx)
-
-    return filtered[:max_items]
-
+    return chosen[:max_items]
 
 def build_regulations_block(target_docs: List[str]) -> str:
     """
@@ -647,16 +1226,57 @@ Instruções adicionais:
 Instruções adicionais:
 - Organiza a resposta por passos.
 """,
-        "documentation": """
+                "documentation": """
 Instruções adicionais:
 - Organiza a resposta por tipos de documentação.
+- Prioriza documentação técnica, avaliação clínica, PMS, PMCF, gestão de risco, requisitos gerais de segurança e desempenho e obrigações do fabricante.
+- Não centres a resposta em regras de classificação, exceto para dizer que a documentação depende da classe do dispositivo.
+- Indica claramente o que é obrigatório e o que depende da classe/finalidade do dispositivo.
 """,
-        "classification_risk": """
+"classification_risk": """
 Instruções adicionais:
-- Identifica primeiro a regra, ponto, anexo ou artigo realmente relevante.
-- Só depois diz o que essa base permite concluir.
-- Se houver mais do que uma regra potencialmente aplicável, diz isso.
-- Se faltar finalidade, modo de utilização, invasividade, duração de contacto ou contexto clínico, diz isso.
+- Identifica primeiro a base normativa concreta: MDR Artigo 51, MDR Anexo VIII e a regra aplicável.
+- Para dispositivos não invasivos simples, usa a Regra 1 do Anexo VIII.
+- Se o contexto disser que todos os dispositivos não invasivos são Classe I salvo aplicação de outras regras, conclui claramente: "Classe provável: Classe I".
+- Se a pergunta disser apenas que é um termómetro não invasivo, responde que a classe provável é Classe I pela Regra 1, salvo se tiver funcionalidades que ativem outra regra.
+- Se a pergunta mencionar termómetro digital ativo, diagnóstico direto, monitorização ou parâmetros fisiológicos vitais, considera também a Regra 10 e explica que a classe pode mudar conforme a finalidade concreta.
+- Não uses fontes sobre documentação técnica, declaração UE de conformidade, registo, EUDAMED, avaliação da conformidade, organismos notificados ou considerandos para decidir a classe.
+- Termina com uma conclusão prática curta: "Classe provável: ...", seguida das condições a confirmar.
+""",
+
+"manufacturer_obligations": """
+Instruções adicionais:
+- Responde apenas sobre obrigações do fabricante segundo o MDR.
+- Usa o MDR Artigo 10 como fonte principal.
+- Se o utilizador pedir 10 obrigações, enumera 10 obrigações reais e não 10 fontes.
+- Cada obrigação numerada deve terminar com a citação correta.
+- Não uses uma única citação final para sustentar a lista inteira.
+- Não incluas obrigações de organismos notificados, autoridades competentes, MDCG, Comissão ou mandatários como se fossem obrigações do fabricante.
+- Não uses fontes sobre MDCG, Comissão, autoridades competentes, organismos notificados ou anexos institucionais.
+- Podes mencionar a pessoa responsável pela observância da regulamentação, declaração UE de conformidade, marcação CE, UDI, registo, avaliação clínica, PMS/PMCF e documentação técnica quando o contexto o sustentar.
+- No fim, inclui apenas as citações realmente usadas.
+""",
+
+"document_generation": """
+Instruções adicionais:
+- Gera diretamente o documento pedido.
+- Se o utilizador pedir PMCF ou PCMF, cria um Plano PMCF estruturado.
+- Usa o histórico recente para identificar o dispositivo referido, por exemplo "primeira questão".
+- Se só souberes que é um termómetro não invasivo, assume apenas isso e marca o resto como "A confirmar".
+- Não mudes para procedimento de avaliação da conformidade, salvo se o utilizador pedir isso expressamente.
+- Não uses regras de classificação como corpo principal do documento; usa-as apenas para contextualizar a classe do dispositivo.
+- Estrutura recomendada para PMCF:
+  1. Identificação do dispositivo
+  2. Enquadramento regulamentar
+  3. Objetivos do PMCF
+  4. População/utilizadores previstos
+  5. Dados clínicos a recolher
+  6. Métodos e atividades PMCF
+  7. Indicadores, critérios de aceitação e sinais de alerta
+  8. Periodicidade e responsabilidades
+  9. Integração com avaliação clínica, PMS e gestão de risco
+  10. Limitações e informação em falta
+  11. Citações usadas
 """,
     }.get(intent, "")
 
@@ -683,7 +1303,8 @@ Contexto recuperado:
 
 Regras finais:
 - Responde apenas com base no contexto.
-- Quando fizeres uma afirmação normativa, associa-a à citação correta.
+- Quando fizeres uma afirmação normativa, associa-a à citação correta usando exatamente o campo "Citação:".
+- Nunca escrevas "FONTE 1", "FONTE 2", "FONTE 3" ou semelhante na resposta final.
 - Não cries uma nova secção 1.
 - No fim, inclui apenas as citações realmente usadas.
 """
@@ -751,7 +1372,10 @@ def has_minimum_retrieval_confidence(
         return False
 
     best = float(adjusted_scores[selected_indices[0]])
-    return best >= 0.36
+    top_k = selected_indices[:3]
+    avg_top = sum(float(adjusted_scores[i]) for i in top_k) / max(1, len(top_k))
+
+    return best >= 0.25 or avg_top >= 0.34
 
 
 def records_preview(
@@ -788,7 +1412,7 @@ def records_preview(
             "section_title": r.get("section_title", ""),
             "page_start": r.get("page_start", ""),
             "page_end": r.get("page_end", ""),
-            "score_adjusted": float(adjusted_scores[idx]),
+            "score_adjusted": max(0.0, min(1.0, float(adjusted_scores[idx]))),
         })
     return out
 
@@ -849,41 +1473,573 @@ def build_low_confidence_answer(
     return f"{fixed_regulations_section}\n\n" + "\n".join(body).strip()
 
 
-def search_question(question: str) -> Dict[str, Any]:
+def is_bad_regulatory_scope_source(record: Dict[str, Any]) -> bool:
+    """
+    Remove fontes pouco úteis para respostas de enquadramento regulatório geral.
+    """
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    section_type = (record.get("section_type") or "").lower()
+
+    if section_type in {"recital", "preamble", "document"}:
+        return True
+
+    bad_patterns = [
+        # organismos notificados / avaliação da conformidade / escrutínio
+        "anexo vii",
+        "organismos notificados",
+        "organismo notificado",
+        "requisitos a cumprir pelos organismos notificados",
+        "artigo 55",
+        "mecanismo de escrutínio",
+        "mecanismo de escrutinio",
+        "artigo 57",
+        "sistema eletrónico relativo aos organismos notificados",
+        "sistema eletronico relativo aos organismos notificados",
+        "capítulo v",
+        "capitulo v",
+        "classificação e avaliação da conformidade",
+        "classificacao e avaliacao da conformidade",
+
+        # dispositivos feitos por medida / anexos que não são obrigações gerais do fabricante
+        "anexo xiii",
+        "dispositivos feitos por medida",
+        "procedimento aplicável aos dispositivos feitos por medida",
+        "procedimento aplicavel aos dispositivos feitos por medida",
+
+        # MDCG / Comissão / autoridades — NÃO são obrigações do fabricante
+        "artigo 105",
+        "atribuições do mdcg",
+        "atribuicoes do mdcg",
+        "mdcg",
+        "artigo 106",
+        "artigo 107",
+        "comissão",
+        "comissao",
+        "autoridades competentes",
+        "autoridade competente",
+        "grupo de coordenação dos dispositivos médicos",
+        "grupo de coordenacao dos dispositivos medicos",
+    ]
+
+    return any(p in text for p in bad_patterns)
+
+
+def is_good_regulatory_scope_source(record: Dict[str, Any]) -> bool:
+    """
+    Fontes úteis para dizer que regulamentos/artigos/anexos principais se aplicam.
+    """
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    short_name = record.get("short_name")
+
+    if short_name == "MDR":
+        good_mdr = [
+            "artigo 5",
+            "artigo 10",
+            "artigo 51",
+            "artigo 52",
+            "artigo 61",
+            "anexo i",
+            "anexo ii",
+            "anexo iii",
+            "anexo viii",
+            "anexo xiv",
+            "requisitos gerais de segurança e desempenho",
+            "requisitos gerais de seguranca e desempenho",
+            "documentação técnica",
+            "documentacao tecnica",
+            "avaliação clínica",
+            "avaliacao clinica",
+            "vigilância pós-comercialização",
+            "vigilancia pos-comercializacao",
+            "regras de classificação",
+            "regras de classificacao",
+        ]
+        return any(p in text for p in good_mdr)
+
+    if short_name == "AI_ACT":
+        good_ai = [
+            "artigo 6",
+            "artigo 9",
+            "artigo 10",
+            "artigo 11",
+            "artigo 16",
+            "artigo 25",
+            "artigo 43",
+            "alto risco",
+            "sistema de ia de risco elevado",
+            "documentação técnica",
+            "documentacao tecnica",
+            "avaliação da conformidade",
+            "avaliacao da conformidade",
+        ]
+        return any(p in text for p in good_ai)
+
+    return False
+
+
+def is_bad_classification_source(record: Dict[str, Any]) -> bool:
+    """
+    Remove fontes que não servem para decidir classe de risco MDR.
+
+    Importante:
+    - Não usar simples 'anexo vi' in text, porque isso apanha 'anexo viii'.
+    - Não usar simples 'artigo 1' in text, porque pode criar falsos positivos.
+    """
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    section_type = (record.get("section_type") or "").lower()
+
+    if section_type in {"recital", "preamble", "document"}:
+        return True
+
+    # Nunca bloquear fontes nucleares de classificação
+    if re.search(r"\bartigo\s+51\b", text):
+        return False
+
+    if re.search(r"\banexo\s+viii\b", text):
+        return False
+
+    if re.search(r"\bregra\s+\d+\b", text):
+        return False
+
+    bad_regex_patterns = [
+        r"\banexo\s+ii\b",
+        r"\banexo\s+iii\b",
+        r"\banexo\s+iv\b",
+        r"\banexo\s+vi\b",
+        r"\banexo\s+vii\b",
+        r"\banexo\s+ix\b",
+        r"\banexo\s+x\b",
+        r"\banexo\s+xi\b",
+        r"\bartigo\s+1\b",
+        r"\bartigo\s+10\b",
+        r"\bartigo\s+52\b",
+        r"\bartigo\s+84\b",
+    ]
+
+    if any(re.search(pattern, text) for pattern in bad_regex_patterns):
+        return True
+
+    bad_text_patterns = [
+        "documentação técnica",
+        "documentacao tecnica",
+        "vigilância pós-comercialização",
+        "vigilancia pos-comercializacao",
+        "declaração ue de conformidade",
+        "declaracao ue de conformidade",
+        "informações a apresentar aquando do registo",
+        "informacoes a apresentar aquando do registo",
+        "registo de dispositivos",
+        "operadores",
+        "organismos notificados",
+        "avaliação da conformidade",
+        "avaliacao da conformidade",
+        "organismo notificado",
+        "eudamed",
+        "certificado de venda livre",
+        "objeto e âmbito de aplicação",
+        "objecto e ambito de aplicacao",
+        "obrigações gerais dos fabricantes",
+        "obrigacoes gerais dos fabricantes",
+        "procedimentos de avaliação da conformidade",
+        "procedimentos de avaliacao da conformidade",
+        "plano de monitorização pós-comercialização",
+        "plano de monitorizacao pos-comercializacao",
+    ]
+
+    return any(pattern in text for pattern in bad_text_patterns)
+
+
+def is_good_classification_source(record: Dict[str, Any]) -> bool:
+    """
+    Mantém apenas fontes realmente úteis para classificação MDR.
+    """
+    if record.get("short_name") != "MDR":
+        return False
+
+    if is_bad_classification_source(record):
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    if re.search(r"\bartigo\s+51\b", text):
+        return True
+
+    if re.search(r"\banexo\s+viii\b", text):
+        return True
+
+    if re.search(r"\bregra\s+\d+\b", text):
+        return True
+
+    good_text_patterns = [
+        "classificação dos dispositivos",
+        "classificacao dos dispositivos",
+        "regras de classificação",
+        "regras de classificacao",
+        "dispositivos não invasivos",
+        "dispositivos nao invasivos",
+        "classe i",
+        "classe iia",
+        "classe iib",
+        "classe iii",
+    ]
+
+    return any(pattern in text for pattern in good_text_patterns)
+
+
+
+def select_chroma_retrieved_indices(
+    records: List[Dict[str, Any]],
+    adjusted_scores: List[float],
+    plan: Dict[str, Any],
+    max_items: int = 18,
+) -> List[int]:
+    """
+    Seleção própria para resultados vindos do Chroma.
+
+    - classification_risk: mantém só fontes boas de classificação.
+    - documentation/document_generation: força Anexo II, Anexo III, Artigo 10, Artigo 61, Anexo XIV/PMCF.
+    - outros intents: ranking normal.
+    """
+    if not records:
+        return []
+
+    intent = plan.get("intent", "requirement_lookup")
+
+    ranked = sorted(
+        range(len(records)),
+        key=lambda i: float(adjusted_scores[i]),
+        reverse=True,
+    )
+
+    selected: List[int] = []
+    seen = set()
+
+    def key_for(idx: int) -> str:
+        r = records[idx]
+        citation = (r.get("citation_label") or "").strip()
+        section_number = (r.get("section_number") or "").strip()
+        chunk_id = str(r.get("chunk_id") or "").strip()
+
+        if citation and section_number:
+            return f"{citation}::{section_number}"
+
+        if citation and chunk_id:
+            return f"{citation}::{chunk_id}"
+
+        if citation:
+            return f"citation::{citation}"
+
+        if chunk_id:
+            return f"chunk::{chunk_id}"
+
+        return f"idx::{idx}"
+
+    def source_text(idx: int) -> str:
+        r = records[idx]
+        return " ".join([
+            str(r.get("citation_label", "")),
+            str(r.get("section_number", "")),
+            str(r.get("section_title", "")),
+            str(r.get("section_type", "")),
+            str(r.get("chunk_text", ""))[:1800],
+        ]).lower()
+
+    def add(idx: int) -> None:
+        k = key_for(idx)
+        if k in seen:
+            return
+        selected.append(idx)
+        seen.add(k)
+        
+        
+    if intent == "manufacturer_obligations":
+        obligations_ranked = [
+            idx for idx in ranked
+            if is_good_manufacturer_obligations_source(records[idx])
+            and not is_bad_manufacturer_obligations_source(records[idx])
+        ]
+
+        for wanted in [
+            "artigo 10",
+            "artigo 15",
+            "artigo 19",
+            "artigo 20",
+            "artigo 27",
+            "artigo 29",
+            "artigo 31",
+            "artigo 61",
+            "artigo 83",
+            "artigo 84",
+            "artigo 86",
+            "anexo i",
+            "anexo ii",
+            "anexo iii",
+        ]:
+            for idx in obligations_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in obligations_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+    if intent == "classification_risk":
+        classification_ranked = [
+            idx for idx in ranked
+            if is_good_classification_source(records[idx])
+        ]
+
+        for idx in classification_ranked:
+            t = source_text(idx)
+            if "artigo 51" in t or "classificação dos dispositivos" in t or "classificacao dos dispositivos" in t:
+                add(idx)
+                break
+
+        for idx in classification_ranked:
+            t = source_text(idx)
+            if "anexo viii" in t and ("regras de classificação" in t or "regras de classificacao" in t):
+                add(idx)
+                break
+
+        for idx in classification_ranked:
+            t = source_text(idx)
+            if "regra 1" in t or "não invasivo" in t or "nao invasivo" in t:
+                add(idx)
+
+        for idx in classification_ranked:
+            t = source_text(idx)
+            if (
+                "regra 10" in t
+                or "regra 11" in t
+                or "medição" in t
+                or "medicao" in t
+                or "temperatura" in t
+                or "termómetro" in t
+                or "termometro" in t
+                or "monitorização" in t
+                or "monitorizacao" in t
+                or "diagnóstico" in t
+                or "diagnostico" in t
+                or "software" in t
+            ):
+                add(idx)
+
+        for idx in classification_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+    if intent in {"documentation", "document_generation"}:
+        for idx in ranked:
+            t = source_text(idx)
+            if "anexo ii" in t or "documentação técnica" in t or "documentacao tecnica" in t:
+                add(idx)
+                break
+
+        for idx in ranked:
+            t = source_text(idx)
+            if (
+                "anexo iii" in t
+                or "vigilância pós-comercialização" in t
+                or "vigilancia pos-comercializacao" in t
+                or "pms" in t
+            ):
+                add(idx)
+                break
+
+        for idx in ranked:
+            t = source_text(idx)
+            if "artigo 10" in t or "obrigações gerais dos fabricantes" in t or "obrigacoes gerais dos fabricantes" in t:
+                add(idx)
+                break
+
+        for idx in ranked:
+            t = source_text(idx)
+            if (
+                "artigo 61" in t
+                or "avaliação clínica" in t
+                or "avaliacao clinica" in t
+                or "anexo xiv" in t
+                or "pmcf" in t
+                or "acompanhamento clínico pós-comercialização" in t
+                or "acompanhamento clinico pos-comercializacao" in t
+            ):
+                add(idx)
+
+        for idx in ranked:
+            if len(selected) >= max_items:
+                break
+
+            t = source_text(idx)
+            section_type = (records[idx].get("section_type") or "").lower()
+
+            if section_type == "rule":
+                continue
+
+            if any(bad in t for bad in [
+                "regras de classificação",
+                "regras de classificacao",
+                "regra 1",
+                "regra 7",
+                "regra 10",
+                "regra 11",
+                "regra 12",
+                "regra 17",
+                "regra 22",
+            ]):
+                continue
+
+            add(idx)
+
+        return selected[:max_items]
+    
+    
+    if intent == "regulatory_scope":
+        scope_ranked = [
+            idx for idx in ranked
+            if is_good_regulatory_scope_source(records[idx])
+            and not is_bad_regulatory_scope_source(records[idx])
+        ]
+
+        # MDR — fontes nucleares
+        for wanted in [
+            "artigo 5",
+            "artigo 10",
+            "anexo i",
+            "anexo ii",
+            "artigo 61",
+            "anexo xiv",
+            "anexo viii",
+        ]:
+            for idx in scope_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        # AI Act — fontes nucleares
+        for wanted in [
+            "artigo 6",
+            "artigo 9",
+            "artigo 10",
+            "artigo 11",
+            "artigo 16",
+            "artigo 25",
+            "artigo 43",
+        ]:
+            for idx in scope_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in scope_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+    for idx in ranked:
+        if len(selected) >= max_items:
+            break
+        add(idx)
+
+    return selected[:max_items]
+
+
+def search_question(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """
     Executa apenas a fase de pesquisa semântica.
     """
-    retrieval = retrieve_sources(question=question)
+    if not OLLAMA_EMBED_MODEL:
+        raise ValueError("Falta OLLAMA_EMBED_MODEL no .env")
 
-    records = retrieval["records"]
-    selected_indices = retrieval["selected_indices"]
-    adjusted_scores = retrieval["adjusted_scores"]
-    plan = retrieval["plan"]
+    question_clean = (question or "").strip()
+    if not question_clean:
+        raise ValueError("A pergunta não pode estar vazia.")
+
+    retrieval_question = build_contextual_question(question_clean, history) if history else question_clean
+    plan = analyze_question(retrieval_question)
+
+    if VECTOR_STORE == "chroma" and chroma_has_documents():
+        records, base_scores, adjusted_scores, selected_indices = query_chroma_with_variants(
+            retrieval_question,
+            plan,
+            n_results_per_query=10,
+        )
+
+        if plan.get("intent") in {"manufacturer_obligations", "classification_risk", "documentation", "document_generation"}:
+            selected_indices = select_chroma_retrieved_indices(
+                records=records,
+                adjusted_scores=adjusted_scores,
+                plan=plan,
+                max_items=18,
+            )
+        else:
+            selected_indices = select_relevant_indices(
+                records=records,
+                adjusted_scores=np.array(adjusted_scores, dtype=float),
+                plan=plan,
+            )
+
+        return {
+            "intent": plan["intent"],
+            "target_docs": plan["target_docs"],
+            "results": records_preview(selected_indices, records, adjusted_scores),
+        }
+
+    payload = validate_embeddings_payload(str(EMBEDDINGS_PATH))
+    all_records = payload["records"]
+    embeddings = payload["embeddings"]
+
+    selected_indices, base_scores, adjusted_scores, plan = retrieve_relevant_indices(
+        question=retrieval_question,
+        records=all_records,
+        embeddings=embeddings,
+        embed_model=OLLAMA_EMBED_MODEL,
+    )
 
     return {
         "intent": plan["intent"],
         "target_docs": plan["target_docs"],
-        "results": records_preview(selected_indices, records, adjusted_scores),
+        "results": records_preview(selected_indices, all_records, adjusted_scores),
     }
 
 
 def answer_question(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
-    """
-    Executa o fluxo completo de retrieval + geração de resposta.
-
-    Pipeline:
-    1. valida configuração necessária;
-    2. corre retrieval para identificar fontes relevantes;
-    3. seleciona fontes para geração;
-    4. decide entre:
-       - fallback conservador, se a confiança for baixa;
-       - geração normal via Ollama, se a confiança for suficiente;
-    5. devolve a resposta final e os metadados úteis para a API.
-    """
     if not OLLAMA_CHAT_MODEL:
         raise ValueError("Falta OLLAMA_CHAT_MODEL no .env")
 
     question_clean = (question or "").strip()
+    if not question_clean:
+        raise ValueError("A pergunta não pode estar vazia.")
 
     is_follow_up = (
         len(question_clean) < 120
@@ -911,16 +2067,40 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
         else question_clean
     )
 
-    retrieval = retrieve_sources(
-        question=retrieval_question,
-        history=history,
-    )
+    plan = analyze_question(retrieval_question)
 
-    records = retrieval["records"]
-    selected_indices = retrieval["selected_indices"]
-    base_scores = retrieval["base_scores"]
-    adjusted_scores = retrieval["adjusted_scores"]
-    plan = retrieval["plan"]
+    if VECTOR_STORE == "chroma" and chroma_has_documents():
+        n_results = 25 if plan.get("intent") in {"manufacturer_obligations", "classification_risk", "documentation", "document_generation"} else 12
+
+        records, base_scores, adjusted_scores, _ = query_chroma_with_variants(
+            retrieval_question,
+            plan,
+            n_results_per_query=n_results,
+        )
+
+        if not records:
+            raise ValueError("Não foi possível recuperar contexto relevante.")
+
+        selected_indices = select_chroma_retrieved_indices(
+            records=records,
+            adjusted_scores=adjusted_scores,
+            plan=plan,
+            max_items=18,
+        )
+        retrieval_backend = "chroma"
+        
+    else:
+        payload = validate_embeddings_payload(str(EMBEDDINGS_PATH))
+        records = payload["records"]
+        embeddings = payload["embeddings"]
+
+        selected_indices, base_scores, adjusted_scores, plan = retrieve_relevant_indices(
+            question=retrieval_question,
+            records=records,
+            embeddings=embeddings,
+            embed_model=OLLAMA_EMBED_MODEL,
+        )
+        retrieval_backend = "pickle"
 
     if not selected_indices:
         raise ValueError("Não foi possível recuperar contexto relevante.")
@@ -948,6 +2128,7 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
             "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
             "generation_sources": records_preview(generation_indices, records, adjusted_scores),
             "answer": final_answer,
+            "retrieval_backend": retrieval_backend,
         }
 
     context = build_context(generation_indices, records)
@@ -979,4 +2160,5 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
         "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
         "generation_sources": records_preview(generation_indices, records, adjusted_scores),
         "answer": final_answer,
+        "retrieval_backend": retrieval_backend,
     }

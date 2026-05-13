@@ -72,9 +72,17 @@ MEDICAL_DEVICE_TERMS = {
 
 # Termos associados a IA / machine learning.
 AI_TERMS = {
-    "ia", "ai", "inteligencia artificial", "inteligência artificial", "modelo",
-    "machine learning", "aprendizagem automatica", "aprendizagem automática",
-    "rede neural", "algoritmo"
+    "ia",
+    "ai",
+    "inteligencia artificial",
+    "inteligência artificial",
+    "machine learning",
+    "aprendizagem automatica",
+    "aprendizagem automática",
+    "rede neural",
+    "algoritmo de ia",
+    "modelo de ia",
+    "sistema de ia",
 }
 
 # Termos indicativos de perguntas sobre classificação e risco.
@@ -93,6 +101,51 @@ DOCUMENTATION_TERMS = {
 CONFORMITY_TERMS = {
     "avaliacao da conformidade", "avaliação da conformidade", "organismo notificado",
     "exame ue de tipo", "anexo ix", "anexo x", "anexo xi", "procedimento de conformidade"
+}
+
+MANUFACTURER_OBLIGATION_TERMS = {
+    "obrigacoes gerais dos fabricantes",
+    "obrigações gerais dos fabricantes",
+    "obrigacoes gerais de um fabricante",
+    "obrigações gerais de um fabricante",
+    "obrigacoes do fabricante",
+    "obrigações do fabricante",
+    "obrigacoes dos fabricantes",
+    "obrigações dos fabricantes",
+    "fabricante segundo o mdr",
+    "fabricantes segundo o mdr",
+    "fabricante tem segundo o mdr",
+    "fabricante tem no mdr",
+    "artigo 10",
+}
+
+DOCUMENT_GENERATION_TERMS = {
+    "gera o documento",
+    "gerar o documento",
+    "cria o documento",
+    "criar o documento",
+    "faz o documento",
+    "fazer o documento",
+    "redige o documento",
+    "redigir o documento",
+    "elabora o documento",
+    "elaborar o documento",
+    "gera o pmcf",
+    "gerar o pmcf",
+    "faz o pmcf",
+    "fazer o pmcf",
+    "cria o pmcf",
+    "criar o pmcf",
+    "documento pmcf",
+    "plano pmcf",
+    "relatorio pmcf",
+    "relatório pmcf",
+    "documento pms",
+    "plano pms",
+    "template",
+    "modelo de documento",
+    "pcmf",  # tolerância a typo
+    "PCMF",
 }
 
 
@@ -154,6 +207,9 @@ def tokenize_keywords(text: str) -> List[str]:
     return [t for t in tokens if len(t) >= 3 and t not in STOPWORDS]
 
 
+
+
+
 def contains_any(text: str, patterns: List[str]) -> bool:
     """
     Verifica se algum padrão textual está contido num texto.
@@ -171,6 +227,38 @@ def contains_any(text: str, patterns: List[str]) -> bool:
             True se pelo menos um padrão estiver presente.
     """
     return any(p in text for p in patterns)
+
+
+def contains_term(text: str, term: str) -> bool:
+    """
+    Procura termos evitando falsos positivos.
+
+    Exemplo:
+    - 'ai' deve bater em 'AI'
+    - mas não deve bater em 'sinais' ou 'vitais'
+    """
+    text = normalize_text(text)
+    term = normalize_text(term)
+
+    if not term:
+        return False
+
+    # Expressões com espaços: match direto da expressão normalizada
+    if " " in term:
+        return term in text
+
+    # Termos curtos como "ai" e "ia" só como palavra isolada
+    if len(term) <= 2:
+        return re.search(
+            rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])",
+            text,
+        ) is not None
+
+    # Termos normais: palavra completa
+    return re.search(
+        rf"\b{re.escape(term)}\b",
+        text,
+    ) is not None
 
 
 def cosine_similarity(query_vec: np.ndarray, matrix: np.ndarray) -> np.ndarray:
@@ -283,8 +371,8 @@ def detect_device_profile(question: str) -> Dict[str, Any]:
     """
     q = normalize_text(question)
 
-    is_medical_device = any(term in q for term in MEDICAL_DEVICE_TERMS)
-    mentions_ai = any(term in q for term in AI_TERMS)
+    is_medical_device = any(contains_term(q, term) for term in MEDICAL_DEVICE_TERMS)
+    mentions_ai = any(contains_term(q, term) for term in AI_TERMS)
 
     is_implantable = any(term in q for term in [
         "pacemaker", "marca-passo", "marcapasso", "implante", "implantavel", "implantável"
@@ -316,62 +404,136 @@ def analyze_question(question: str) -> Dict[str, Any]:
     """
     Analisa a pergunta e produz um plano inicial de retrieval.
 
-    O plano inclui:
-    - intenção principal da pergunta;
-    - documentos-alvo prioritários;
-    - perfil heurístico do produto/dispositivo mencionado.
-
-    Intenções possíveis:
-    - regulatory_scope
-    - conformity_procedure
-    - documentation
-    - classification_risk
-    - requirement_lookup
-
-    Regras de documentos-alvo:
-    - MDR se a pergunta parecer sobre dispositivo médico;
-    - AI_ACT se mencionar AI Act explicitamente;
-    - MDR + AI_ACT quando houver dispositivo médico com IA.
-
-    Args:
-        question:
-            Pergunta do utilizador.
-
-    Returns:
-        Dict[str, Any]:
-            Plano com intenção, documentos-alvo e perfil.
+    Ordem de prioridade:
+    1. geração de documentos;
+    2. âmbito regulatório;
+    3. documentação técnica / PMS / PMCF;
+    4. avaliação da conformidade;
+    5. classificação de risco;
+    6. lookup geral.
     """
     q = normalize_text(question)
     profile = detect_device_profile(question)
 
-    mentions_mdr = "mdr" in q or "medical device regulation" in q
-    mentions_ai_act = "ai act" in q or "ia act" in q or "artificial intelligence act" in q
+    mentions_mdr = (
+        "mdr" in q
+        or "regulamento 2017/745" in q
+        or "regulamento ue 2017/745" in q
+        or "medical device regulation" in q
+    )
 
-    if contains_any(q, list(CONFORMITY_TERMS)):
-        intent = "conformity_procedure"
-    elif contains_any(q, list(DOCUMENTATION_TERMS)):
-        intent = "documentation"
-    elif contains_any(q, list(CLASSIFICATION_TERMS)):
-        intent = "classification_risk"
-    elif any(term in q for term in [
-        "que legislacoes", "que legislacao", "que legislação", "que regulamentos",
-        "que normas", "legislacao aplicavel", "legislação aplicável",
-        "que tenho de cumprir", "que preciso de cumprir", "cumprir"
-    ]):
+    mentions_ai_act = (
+        "ai act" in q
+        or "ia act" in q
+        or "regulamento 2024/1689" in q
+        or "regulamento ue 2024/1689" in q
+        or "artificial intelligence act" in q
+    )
+
+    asks_document_generation = contains_any(q, list(DOCUMENT_GENERATION_TERMS))
+
+    asks_regulatory_scope = any(term in q for term in [
+        "que regulamentos",
+        "quais regulamentos",
+        "que legislacoes",
+        "que legislacao",
+        "que legislacao aplicavel",
+        "que legislação",
+        "que legislação aplicável",
+        "quais legislacoes",
+        "quais legislações",
+        "que normas",
+        "legislacao aplicavel",
+        "legislação aplicável",
+        "que tenho de cumprir",
+        "que preciso de cumprir",
+        "o que tenho de cumprir",
+        "regulamentos tenho de cumprir",
+        "requisitos tenho de cumprir",
+        "obrigações tenho",
+        "obrigacoes tenho",
+        "ambito regulatorio",
+        "âmbito regulatório",
+    ])
+
+    asks_documentation = (
+        contains_any(q, list(DOCUMENTATION_TERMS))
+        or any(term in q for term in [
+            "pmcf",
+            "pcmf",
+            "pms",
+            "vigilancia pos-comercializacao",
+            "vigilância pós-comercialização",
+            "acompanhamento clinico pos-comercializacao",
+            "acompanhamento clínico pós-comercialização",
+            "avaliacao clinica",
+            "avaliação clínica",
+            "relatorio de avaliacao clinica",
+            "relatório de avaliação clínica",
+            "anexo xiv",
+            "anexo 14",
+        ])
+    )
+
+    asks_manufacturer_obligations = contains_any(q, list(MANUFACTURER_OBLIGATION_TERMS)) or (
+    "fabricante" in q
+    and ("obrigacao" in q or "obrigacoes" in q or "obrigação" in q or "obrigações" in q)
+    )
+
+    asks_conformity = contains_any(q, list(CONFORMITY_TERMS))
+
+    asks_classification = contains_any(q, list(CLASSIFICATION_TERMS))
+
+    if asks_document_generation:
+        intent = "document_generation"
+    elif asks_manufacturer_obligations:
+        intent = "manufacturer_obligations"
+    elif asks_regulatory_scope:
         intent = "regulatory_scope"
+    elif asks_documentation:
+        intent = "documentation"
+    elif asks_conformity:
+        intent = "conformity_procedure"
+    elif asks_classification:
+        intent = "classification_risk"
     else:
         intent = "requirement_lookup"
 
     target_docs = []
-    if mentions_mdr and not mentions_ai_act:
+
+    is_ai_medical_software = (
+        profile.get("mentions_ai")
+        and (
+            profile.get("is_medical_device")
+            or profile.get("is_software")
+            or "software medico" in q
+            or "software médico" in q
+            or "dispositivo medico" in q
+            or "dispositivo médico" in q
+        )
+    )
+
+    if mentions_mdr and not mentions_ai_act and not is_ai_medical_software:
         target_docs = ["MDR"]
-    elif mentions_ai_act and not mentions_mdr:
+
+    elif mentions_ai_act and not mentions_mdr and not is_ai_medical_software:
         target_docs = ["AI_ACT"]
-    elif profile["mentions_ai"] and profile["is_medical_device"]:
+
+    elif is_ai_medical_software:
         target_docs = ["MDR", "AI_ACT"]
+
     elif profile["is_medical_device"]:
         target_docs = ["MDR"]
 
+    elif intent in {
+        "manufacturer_obligations",
+        "documentation",
+        "document_generation",
+        "conformity_procedure",
+        "classification_risk",
+    }:
+        target_docs = ["MDR"]
+        
     return {
         "intent": intent,
         "target_docs": target_docs,
@@ -382,59 +544,82 @@ def analyze_question(question: str) -> Dict[str, Any]:
 def build_query_variants(question: str, plan: Dict[str, Any]) -> List[str]:
     """
     Gera variantes de query para reforçar a recuperação semântica.
-
-    Em vez de depender apenas da pergunta original, o sistema cria queries
-    auxiliares mais "regulatórias", contendo artigos, anexos ou termos-chave
-    relevantes para a intenção identificada.
-
-    Isto ajuda a:
-    - melhorar cobertura;
-    - puxar fontes normativas centrais;
-    - reduzir o risco de retrieval demasiado genérico.
-
-    Args:
-        question:
-            Pergunta original.
-        plan:
-            Plano inferido por `analyze_question`.
-
-    Returns:
-        List[str]:
-            Lista deduplicada de queries a usar no retrieval.
     """
     queries = [question.strip()]
     intent = plan["intent"]
     target_docs = plan["target_docs"]
+    q_norm = normalize_text(question)
 
     if intent == "regulatory_scope":
         if target_docs == ["MDR", "AI_ACT"]:
-            queries.append("MDR artigo 5 artigo 10 anexo i anexo ii dispositivo medico fabricante")
-            queries.append("AI Act artigo 6 artigo 9 artigo 16 artigo 25 artigo 43 sistema de IA de risco elevado")
+            queries.append("MDR artigo 5 artigo 10 anexo i anexo ii dispositivo médico fabricante requisitos gerais segurança desempenho")
+            queries.append("AI Act artigo 6 artigo 9 artigo 10 artigo 11 artigo 16 artigo 25 artigo 43 sistema de IA de risco elevado")
+            queries.append("dispositivo médico com IA MDR AI Act obrigações fabricante prestador deployer alto risco")
         elif target_docs == ["MDR"]:
-            queries.append("MDR artigo 5 artigo 10 anexo i anexo ii dispositivo médico fabricante requisitos gerais")
+            queries.append("MDR artigo 5 artigo 10 anexo i anexo ii dispositivo médico fabricante requisitos gerais segurança desempenho documentação técnica")
         elif target_docs == ["AI_ACT"]:
-            queries.append("AI Act artigo 6 artigo 9 artigo 16 artigo 25 alto risco")
+            queries.append("AI Act artigo 6 artigo 9 artigo 10 artigo 11 artigo 16 artigo 25 alto risco sistema de IA")
+        else:
+            queries.append("MDR AI Act regulamentos aplicáveis dispositivo médico software inteligência artificial obrigações")
 
+    
+    elif intent == "manufacturer_obligations":
+        queries.append("MDR Artigo 10 obrigações gerais dos fabricantes sistema de gestão da qualidade gestão de risco avaliação clínica documentação técnica")
+        queries.append("MDR fabricante obrigações gerais conformidade dispositivo requisitos gerais segurança desempenho vigilância pós-comercialização")
+        queries.append("MDR fabricante artigo 10 artigo 15 artigo 83 artigo 84 artigo 86 documentação técnica avaliação clínica")
+        queries.append("MDR fabricante declaração UE de conformidade marcação CE UDI registo dispositivo")
+    
+    
     elif intent == "conformity_procedure":
-        queries.append("MDR avaliacao da conformidade anexo ix anexo x anexo xi organismo notificado artigo 52")
+        queries.append("MDR avaliação da conformidade artigo 52 anexo ix anexo x anexo xi organismo notificado marcação CE")
+        queries.append("MDR procedimentos avaliação da conformidade classe I IIa IIb III fabricante organismo notificado")
         if plan.get("mentions_ai"):
-            queries.append("AI Act artigo 43 avaliacao da conformidade sistema de IA de alto risco")
+            queries.append("AI Act artigo 43 avaliação da conformidade sistema de IA de alto risco")
 
     elif intent == "documentation":
-        queries.append("MDR anexo ii anexo iii documentacao tecnica artigo 10 artigo 61 avaliacao clinica")
+        queries.append("MDR anexo II documentação técnica descrição especificação conceção fabrico requisitos gerais segurança desempenho")
+        queries.append("MDR anexo III documentação técnica vigilância pós-comercialização plano PMS relatório PMS")
+        queries.append("MDR artigo 10 obrigações gerais dos fabricantes documentação técnica sistema gestão risco")
+        queries.append("MDR artigo 61 avaliação clínica anexo XIV relatório avaliação clínica PMCF")
+        queries.append("MDR acompanhamento clínico pós-comercialização PMCF anexo XIV parte B plano PMCF")
         if plan.get("mentions_ai"):
-            queries.append("AI Act documentacao tecnica artigo 11 artigo 16 artigo 18")
+            queries.append("AI Act documentação técnica artigo 11 artigo 16 artigo 18 sistema de IA")
+
+    elif intent == "document_generation":
+        if "pmcf" in q_norm or "pcmf" in q_norm:
+            queries.append("MDR PMCF acompanhamento clínico pós-comercialização anexo XIV parte B plano PMCF avaliação clínica")
+            queries.append("MDR artigo 61 avaliação clínica PMCF acompanhamento clínico pós-comercialização documentação técnica")
+            queries.append("MDR anexo II documentação técnica anexo III vigilância pós-comercialização PMCF")
+            queries.append("MDR plano PMCF objetivos métodos dados clínicos segurança desempenho pós-comercialização")
+        elif "pms" in q_norm or "vigilancia pos-comercializacao" in q_norm:
+            queries.append("MDR plano de vigilância pós-comercialização artigo 84 relatório PMS anexo III")
+            queries.append("MDR anexo III documentação técnica vigilância pós-comercialização PMS")
+        else:
+            queries.append("MDR anexo II documentação técnica anexo III vigilância pós-comercialização artigo 10")
+            queries.append("MDR artigo 61 avaliação clínica anexo XIV documentação técnica")
 
     elif intent == "classification_risk":
-        queries.append("MDR artigo 51 anexo viii regras de classificacao classe risco dispositivo medico")
-        queries.append("MDR regra classificacao dispositivo nao invasivo medicao temperatura corporal")
+        queries.append("MDR artigo 51 anexo VIII regras de classificação classe risco dispositivo médico")
+        queries.append("MDR anexo VIII regra 1 dispositivos não invasivos classe I")
+        queries.append("MDR anexo VIII regra 10 dispositivos ativos diagnóstico monitorização processos fisiológicos vitais")
+        queries.append("MDR anexo VIII regra 11 software diagnóstico terapêutico classe IIa IIb III")
+
         if plan.get("is_thermometer"):
-            queries.append("MDR termometro temperatura corporal nao invasivo regra classificacao")
+            queries.append("MDR termómetro digital temperatura corporal dispositivo ativo medição diagnóstico monitorização regra 10 anexo VIII")
+            queries.append("MDR dispositivo não invasivo medição temperatura corporal regra 1 regra 10 classificação anexo VIII")
+
+        if plan.get("is_software"):
+            queries.append("MDR software destinado a prestar informações decisões diagnóstico terapêutico regra 11 anexo VIII")
+
         if plan.get("mentions_ai"):
-            queries.append("AI Act artigo 6 anexo iii sistema de IA de alto risco")
+            queries.append("AI Act artigo 6 anexo III sistema de IA de alto risco dispositivo médico")
 
     else:
         queries.append(f"{question.strip()} requisitos aplicáveis obrigação definição")
+        if plan.get("is_medical_device"):
+            queries.append("MDR artigo 10 obrigações fabricante requisitos gerais segurança desempenho documentação técnica")
+        if plan.get("mentions_ai"):
+            queries.append("AI Act obrigações sistema de IA artigo 16 artigo 25 artigo 43")
 
     queries = [q for q in queries if q]
     return list(dict.fromkeys(queries))
@@ -542,6 +727,25 @@ def section_type_bonus(intent: str, section_type: str) -> float:
             "recital": -0.04,
             "preamble": -0.06,
             "document": -0.10,
+        },
+        "document_generation": {
+            "annex": 0.13,
+            "article": 0.08,
+            "point": 0.07,
+            "rule": -0.04,
+            "chapter": 0.01,
+            "recital": -0.08,
+            "preamble": -0.10,
+            "document": -0.12,
+        },
+        "manufacturer_obligations": {
+            "article": 0.12,
+            "annex": 0.05,
+            "point": 0.04,
+            "chapter": -0.04,
+            "recital": -0.08,
+            "preamble": -0.10,
+            "document": -0.12,
         },
     }
     return table.get(intent, {}).get(section_type, 0.0)
@@ -651,8 +855,40 @@ def intent_pattern_bonus(plan: Dict[str, Any], record: Dict[str, Any]) -> float:
     )
 
     bonus = 0.0
+    
+    if intent == "manufacturer_obligations":
+        if short_name == "MDR":
+            if contains_any(text, ["artigo 10", "obrigacoes gerais dos fabricantes", "obrigações gerais dos fabricantes"]):
+                bonus += 0.45
+            if contains_any(text, ["artigo 15", "pessoa responsavel pela observancia", "pessoa responsável pela observância"]):
+                bonus += 0.16
+            if contains_any(text, ["artigo 19", "declaracao ue de conformidade", "declaração ue de conformidade"]):
+                bonus += 0.14
+            if contains_any(text, ["artigo 20", "marcacao ce", "marcação ce"]):
+                bonus += 0.14
+            if contains_any(text, ["artigo 27", "udi", "identificacao unica do dispositivo", "identificação única do dispositivo"]):
+                bonus += 0.12
+            if contains_any(text, ["artigo 29", "registo dos dispositivos"]):
+                bonus += 0.12
+            if contains_any(text, ["artigo 31", "registo dos fabricantes"]):
+                bonus += 0.12
+            if contains_any(text, ["artigo 61", "avaliacao clinica", "avaliação clínica"]):
+                bonus += 0.14
+            if contains_any(text, ["artigo 83", "vigilancia pos-comercializacao", "vigilância pós-comercialização"]):
+                bonus += 0.14
+            if contains_any(text, ["artigo 84", "plano de vigilancia pos-comercializacao", "plano de vigilância pós-comercialização"]):
+                bonus += 0.12
+            if contains_any(text, ["artigo 86", "relatorio periodico de seguranca", "relatório periódico de segurança"]):
+                bonus += 0.10
+            if contains_any(text, ["anexo i", "requisitos gerais de seguranca e desempenho", "requisitos gerais de segurança e desempenho"]):
+                bonus += 0.12
+            if contains_any(text, ["anexo ii", "documentacao tecnica", "documentação técnica"]):
+                bonus += 0.14
+            if contains_any(text, ["anexo iii", "documentacao tecnica relativa a vigilancia", "documentação técnica relativa à vigilância"]):
+                bonus += 0.12
+    
 
-    if intent == "regulatory_scope":
+    elif intent == "regulatory_scope":
         if short_name == "MDR":
             if contains_any(text, ["artigo 5", "colocacao no mercado", "entrada em servico"]):
                 bonus += 0.18
@@ -689,6 +925,20 @@ def intent_pattern_bonus(plan: Dict[str, Any], record: Dict[str, Any]) -> float:
         ]):
             bonus += 0.16
 
+    elif intent == "document_generation":
+        if short_name == "MDR":
+            if contains_any(text, ["anexo ii", "documentacao tecnica", "documentação técnica"]):
+                bonus += 0.18
+            if contains_any(text, ["anexo iii", "vigilancia pos-comercializacao", "vigilância pós-comercialização"]):
+                bonus += 0.18
+            if contains_any(text, ["artigo 61", "avaliacao clinica", "avaliação clínica"]):
+                bonus += 0.16
+            if contains_any(text, ["anexo xiv", "pmcf", "acompanhamento clinico pos-comercializacao", "acompanhamento clínico pós-comercialização"]):
+                bonus += 0.22
+            if contains_any(text, ["artigo 10", "obrigacoes gerais dos fabricantes", "obrigações gerais dos fabricantes"]):
+                bonus += 0.10
+    
+    
     elif intent == "classification_risk":
         if short_name == "MDR":
             if contains_any(text, ["artigo 51", "classificacao dos dispositivos", "classificação dos dispositivos"]):
@@ -735,6 +985,45 @@ def negative_pattern_penalty(plan: Dict[str, Any], record: Dict[str, Any]) -> fl
     )
 
     penalty = 0.0
+    
+    if intent == "manufacturer_obligations":
+        if contains_any(text, [
+            "anexo vii",
+            "organismos notificados",
+            "organismo notificado",
+            "requisitos a cumprir pelos organismos notificados",
+            "artigo 55",
+            "mecanismo de escrutinio",
+            "mecanismo de escrutínio",
+            "artigo 57",
+            "sistema eletronico relativo aos organismos notificados",
+            "sistema eletrónico relativo aos organismos notificados",
+            "anexo xiii",
+            "dispositivos feitos por medida",
+            "procedimento aplicavel aos dispositivos feitos por medida",
+            "procedimento aplicável aos dispositivos feitos por medida",
+            "capitulo v",
+            "capítulo v",
+
+            # bloquear fontes institucionais
+            "artigo 105",
+            "atribuicoes do mdcg",
+            "atribuições do mdcg",
+            "mdcg",
+            "artigo 106",
+            "artigo 107",
+            "comissao",
+            "comissão",
+            "autoridades competentes",
+            "autoridade competente",
+            "grupo de coordenacao dos dispositivos medicos",
+            "grupo de coordenação dos dispositivos médicos",
+        ]):
+            penalty -= 0.90
+
+        if record.get("section_type") == "chapter":
+            penalty -= 0.20
+    
 
     if intent == "regulatory_scope":
         if contains_any(text, [
@@ -745,16 +1034,37 @@ def negative_pattern_penalty(plan: Dict[str, Any], record: Dict[str, Any]) -> fl
 
     if intent == "classification_risk":
         if contains_any(text, [
-            "anexo vi", "informacoes a apresentar aquando do registo de dispositivos e operadores",
-            "registo de dispositivos", "operadores"
+            "anexo iv",
+            "declaração ue de conformidade",
+            "declaracao ue de conformidade",
+            "anexo ix",
+            "anexo x",
+            "anexo xi",
+            "avaliação da conformidade",
+            "avaliacao da conformidade",
+            "organismo notificado",
         ]):
-            penalty -= 0.30
+            penalty -= 0.45
 
         if record.get("section_type") == "chapter":
-            penalty -= 0.10
+            penalty -= 0.25
 
     if record.get("section_type") in {"recital", "preamble", "document"}:
         penalty -= 0.02
+        
+    if intent in {"documentation", "document_generation"}:
+        if contains_any(text, [
+            "regras de classificacao",
+            "regras de classificação",
+            "regra 1",
+            "regra 7",
+            "regra 10",
+            "regra 11",
+            "regra 12",
+            "regra 17",
+            "regra 22",
+        ]):
+            penalty -= 0.28
 
     return penalty
 

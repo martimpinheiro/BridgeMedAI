@@ -35,6 +35,22 @@ Para correr backend estando na pasta raiz do projeto (BridgeMedAI): python -m uv
 
 Para correr frontend: npm run dev
 
+Para correr base de dados ChromaDB em WSL:
+1ª vez (para criar ambiente virtual): python3 -m venv .venv-wsl
+source .venv-wsl/bin/activate
+pip install --upgrade pip
+pip install chromadb
+
+
+Sempre a partir daí: wsl -d Ubuntu
+cd /mnt/c/Users/pasta raiz do projeto
+source .venv-wsl/bin/activate
+chroma run --host 0.0.0.0 --port 8002 --path Backend/chroma_db
+
+
+
+
+
 - Quando limpamos dados das tabelas antigas, temos que correr o ficheiro "python .\Python\regulations_and_WriteInTables.py" e só depois posso correr o ficheiro "Tabelas_completas.sql" para ver as tabelas
 
 
