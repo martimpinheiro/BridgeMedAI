@@ -31,7 +31,7 @@ O ChormaDB não se encontra implementado. Tentei por a funcionar mas não conseg
 
 
 
-Para correr backend estando na pasta raiz do projeto (BridgeMedAI): python -m uvicorn api_main:app --reload --app-dir Backend/Python
+Para correr backend estando na pasta raiz do projeto (BridgeMedAI): python -m uvicorn api_main:app --app-dir Backend/Python
 
 Para correr frontend: npm run dev
 
