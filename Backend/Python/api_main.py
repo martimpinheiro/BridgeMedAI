@@ -86,6 +86,68 @@ from api_traceability_service import (
     update_traceability_review,
 )
 
+from api_template_registry import (
+    RegistryError,
+    get_record,
+    get_registry_meta,
+    get_template_file_path,
+    index_templates,
+    is_indexed,
+    list_categories,
+    list_tags,
+    list_templates,
+    reload_registry,
+    search_templates,
+)
+
+from api_document_orchestrator import (
+    orchestrator_taxonomy,
+    suggest_templates,
+)
+
+from api_context_memory import (
+    canonical_field_keys,
+    create_instance as cm_create_instance,
+    create_profile as cm_create_profile,
+    delete_field as cm_delete_field,
+    delete_instance as cm_delete_instance,
+    delete_profile as cm_delete_profile,
+    extract_fields_from_text,
+    get_instance as cm_get_instance,
+    get_or_create_profile_for_conversation,
+    get_profile as cm_get_profile,
+    get_profile_snapshot,
+    init_context_memory_schema,
+    list_fields as cm_list_fields,
+    list_instances as cm_list_instances,
+    list_profiles as cm_list_profiles,
+    recompute_documentation_state,
+    set_field as cm_set_field,
+    templates_using_field,
+    update_instance as cm_update_instance,
+    update_profile_core,
+)
+
+from api_autofill_engine import (
+    AutofillError,
+    autofill_all_for_profile,
+    autofill_instance,
+    get_generated_file_path,
+)
+
+from api_workflow_engine import (
+    apply_workflow,
+    get_template_dependency_view,
+    workflow_for_profile,
+)
+
+from api_chat_questionnaire import (
+    answer_current_question,
+    cancel_session as questionnaire_cancel,
+    get_session_state as questionnaire_state,
+    start_questionnaire,
+)
+
 # ---------------------------------------------------------------------------
 # Metadados OpenAPI por tags
 # ---------------------------------------------------------------------------
@@ -140,6 +202,35 @@ openapi_tags = [
             "das interações do chatbot."
         ),
     },
+    {
+        "name": "Templates",
+        "description": (
+            "Catálogo de templates regulatórios (Backend/templates/registry.json) "
+            "e descoberta semântica para o Regulatory Documentation Copilot."
+        ),
+    },
+    {
+        "name": "Copilot",
+        "description": (
+            "Document Orchestrator — sugestões contextuais de templates a partir "
+            "da conversa atual. Não substitui /chat: é chamado em paralelo."
+        ),
+    },
+    {
+        "name": "Memória",
+        "description": (
+            "Context Memory — perfis de produto, campos extraídos, instâncias de "
+            "documentos e estado documental persistidos por utilizador/conversa."
+        ),
+    },
+    {
+        "name": "Workflow",
+        "description": (
+            "Multi-document workflows — grafo de dependências entre templates, "
+            "path recomendado por classe MDR / uso de IA / software, e validação "
+            "de dependências em falta."
+        ),
+    },
 ]
 
 
@@ -176,6 +267,10 @@ app = FastAPI(
 def startup_init() -> None:
     try:
         init_traceability_schema()
+    except Exception:
+        pass
+    try:
+        init_context_memory_schema()
     except Exception:
         pass
 
@@ -447,6 +542,15 @@ class ChatResponse(BaseModel):
         examples=[
             "1. Regulamentos principais aplicáveis\n- Regulamento (UE) 2017/745 (MDR)\n\n2. Porque se aplicam\n- ..."
         ],
+    )
+
+    document_suggestions: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description=(
+            "Documentos regulatórios recomendados para o contexto da conversa, "
+            "renderizados pelo frontend como cards inline no fim da resposta do assistant. "
+            "Cada item tem `template`, `score`, `rationale`, `matched_regulations`, `matched_themes`."
+        ),
     )
 
     model_config = {
@@ -996,7 +1100,7 @@ def chat_endpoint(
     try:
         if _is_pmcf_generation_command(payload.question):
             return _generate_pmcf_from_chat_command(payload, user)
-        
+
         result = answer_question(
             payload.question,
             history=payload.history or [],
@@ -1014,6 +1118,59 @@ def chat_endpoint(
                 generation_sources=result.get("generation_sources", []),
             )
         except Exception:
+            pass
+
+        # Enriquecer a resposta com sugestões de documentos quando a conversa
+        # parece regulatória. Falha silenciosa — se algo correr mal aqui o
+        # /chat continua a funcionar normalmente.
+        try:
+            # Pedimos vários candidatos (10) para depois diversificar por
+            # categoria — assim se o user mencionou risco + cibersegurança +
+            # usability, garantimos pelo menos um de cada e não só Software.
+            suggestions_payload = suggest_templates(
+                question=payload.question,
+                history=payload.history or [],
+                n_results=10,
+            )
+            detected_themes = suggestions_payload.get("detected_themes") or []
+            detected_regs = suggestions_payload.get("detected_regulations") or []
+            has_signal = bool(detected_themes or detected_regs)
+
+            candidates = []
+            for s in suggestions_payload.get("suggestions", []):
+                score = s.get("score") or 0
+                if has_signal or score >= 0.4:
+                    candidates.append(s)
+
+            # Diversificação: round-robin por categoria. Garante que se
+            # houver sugestões de Risk Management, Cybersecurity, Usability,
+            # etc., aparecem em vez de só repetir Software 5x.
+            by_category = {}
+            for s in candidates:
+                cat = s.get("template", {}).get("category", "_")
+                by_category.setdefault(cat, []).append(s)
+
+            diversified = []
+            # Primeiro round: 1 por categoria
+            for cat_list in by_category.values():
+                if cat_list:
+                    diversified.append(cat_list.pop(0))
+            # Rounds seguintes: enche até atingir o limite
+            while len(diversified) < 6:
+                made_progress = False
+                for cat_list in by_category.values():
+                    if cat_list and len(diversified) < 6:
+                        diversified.append(cat_list.pop(0))
+                        made_progress = True
+                if not made_progress:
+                    break
+
+            print(f'[DEBUG /chat] candidates={len(candidates)} categories={list(by_category.keys())} diversified={len(diversified)}', flush=True)
+            if diversified:
+                result["document_suggestions"] = diversified[:6]
+                print(f'[DEBUG /chat] sent {len(result["document_suggestions"])} suggestions', flush=True)
+        except Exception as _exc:
+            print(f'[DEBUG /chat] EXCEPTION in suggestions: {_exc}', flush=True)
             pass
 
         return result
@@ -1701,3 +1858,1176 @@ def admin_create_invite(payload: InviteCreateRequest, admin: AuthUser = Depends(
 @app.get("/admin/invites", tags=["Administração"], summary="Listar convites de admin.")
 def admin_list_invites(_: AuthUser = Depends(require_admin)) -> List[Dict[str, Any]]:
     return list_admin_invites()
+
+
+# ===========================================================================
+# Templates regulatórios (Regulatory Documentation Copilot)
+# ===========================================================================
+class TemplateRecordModel(BaseModel):
+    id: str
+    name: str
+    file: str
+    category: str
+    doc_type: str
+    description: str
+    keywords: List[str] = Field(default_factory=list)
+    regulations: List[str] = Field(default_factory=list)
+    themes: List[str] = Field(default_factory=list)
+    mandatory_sections: List[str] = Field(default_factory=list)
+    optional_sections: List[str] = Field(default_factory=list)
+    auto_fillable_fields: List[str] = Field(default_factory=list)
+    human_required_fields: List[str] = Field(default_factory=list)
+    dependencies: List[str] = Field(default_factory=list)
+    feeds_into: List[str] = Field(default_factory=list)
+    workflow_priority: int = 99
+    metadata_status: str = "seed"
+
+
+class TemplateSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="Frase livre — contexto da conversa ou pergunta do utilizador.")
+    n_results: int = Field(5, ge=1, le=20)
+    category: Optional[str] = Field(default=None, description="Filtra por categoria exata.")
+    regulation: Optional[str] = Field(default=None, description="Filtra por tag de regulamento (ex: MDR, AI_Act).")
+    theme: Optional[str] = Field(default=None, description="Filtra por tema (ex: clinical, software, risk).")
+
+    @field_validator("query")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("A query não pode estar vazia.")
+        return cleaned
+
+
+class TemplateSearchHit(BaseModel):
+    template: TemplateRecordModel
+    score: Optional[float] = Field(default=None, description="Score [0,1]: maior = mais relevante.")
+    distance: Optional[float] = None
+    rationale_meta: Optional[Dict[str, Any]] = None
+
+
+_TEMPLATE_MEDIA_TYPES = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+
+@app.get(
+    "/templates",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=List[TemplateRecordModel],
+    tags=["Templates"],
+    summary="Listar templates regulatórios disponíveis.",
+    description=(
+        "Devolve o catálogo completo de templates do Regulatory Documentation "
+        "Copilot. Suporta filtros opcionais por categoria, regulamento, tema e "
+        "tipo de documento (TMP/FRM/SOP/LST)."
+    ),
+    operation_id="get_templates_list",
+)
+def templates_list(
+    category: Optional[str] = Query(default=None),
+    regulation: Optional[str] = Query(default=None),
+    theme: Optional[str] = Query(default=None),
+    doc_type: Optional[str] = Query(default=None, pattern="^(TMP|FRM|SOP|LST)$"),
+) -> List[TemplateRecordModel]:
+    try:
+        records = list_templates(
+            category=category,
+            regulation=regulation,
+            theme=theme,
+            doc_type=doc_type,
+        )
+    except RegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    return [TemplateRecordModel(**r) for r in records]
+
+
+@app.get(
+    "/templates/categories",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Templates"],
+    summary="Listar categorias e contagem de templates por categoria.",
+    operation_id="get_templates_categories",
+)
+def templates_categories() -> List[Dict[str, Any]]:
+    try:
+        return list_categories()
+    except RegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
+@app.get(
+    "/templates/tags",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Templates"],
+    summary="Obter taxonomia de tags (regulamentos, temas, doc types).",
+    operation_id="get_templates_tags",
+)
+def templates_tags() -> Dict[str, Any]:
+    try:
+        return list_tags()
+    except RegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
+@app.get(
+    "/templates/registry-info",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Templates"],
+    summary="Metadata global do registry (versão, notas, estado da indexação).",
+    operation_id="get_templates_registry_info",
+)
+def templates_registry_info() -> Dict[str, Any]:
+    try:
+        meta = get_registry_meta()
+    except RegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    return {**meta, "indexed": is_indexed()}
+
+
+@app.get(
+    "/templates/{template_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=TemplateRecordModel,
+    tags=["Templates"],
+    summary="Obter metadata completa de um template.",
+    operation_id="get_template_by_id",
+)
+def template_get(template_id: str = FPath(..., description="ID do template (ex: TMP-CE-01).")) -> TemplateRecordModel:
+    try:
+        record = get_record(template_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Template '{template_id}' não existe.")
+    return TemplateRecordModel(**record.to_dict())
+
+
+@app.get(
+    "/templates/{template_id}/download",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Templates"],
+    summary="Descarregar o ficheiro físico do template.",
+    operation_id="get_template_download",
+)
+def template_download(template_id: str = FPath(...)):
+    try:
+        path = get_template_file_path(template_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Template '{template_id}' não existe.")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except RegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    media_type = _TEMPLATE_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path=str(path), media_type=media_type, filename=path.name)
+
+
+@app.post(
+    "/templates/search",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=List[TemplateSearchHit],
+    tags=["Templates"],
+    summary="Pesquisa semântica de templates a partir de uma frase livre.",
+    description=(
+        "Usa embeddings sobre a metadata dos templates (nome, descrição, keywords, "
+        "categoria, temas, regulamentos) para devolver os templates mais relevantes "
+        "para um contexto de conversa. É a base do Document Orchestrator."
+    ),
+    operation_id="post_templates_search",
+)
+def templates_search(payload: TemplateSearchRequest) -> List[TemplateSearchHit]:
+    try:
+        hits = search_templates(
+            query=payload.query,
+            n_results=payload.n_results,
+            category=payload.category,
+            regulation=payload.regulation,
+            theme=payload.theme,
+        )
+    except RegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro na pesquisa de templates: {exc}",
+        )
+    return [TemplateSearchHit(**hit) for hit in hits]
+
+
+@app.post(
+    "/admin/templates/reindex",
+    tags=["Templates"],
+    summary="Reindexar templates no ChromaDB (admin).",
+    description="Recria a collection `bridgemedai_templates` a partir do registry.json. Use após editar metadata.",
+    operation_id="post_admin_templates_reindex",
+)
+def admin_templates_reindex(
+    rebuild: bool = Query(default=True, description="Se True, apaga a collection antes de re-embeber."),
+    _: AuthUser = Depends(require_admin),
+) -> Dict[str, Any]:
+    try:
+        reload_registry()
+        return index_templates(rebuild=rebuild)
+    except RegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro a reindexar templates: {exc}",
+        )
+
+
+# ===========================================================================
+# Document Orchestrator — sugestões contextuais (Copilot)
+# ===========================================================================
+class SuggestionRequest(BaseModel):
+    question: str = Field(
+        ...,
+        min_length=1,
+        description="Mensagem atual do utilizador (mesma que vai para /chat).",
+    )
+    history: Optional[List[Dict[str, str]]] = Field(
+        default=None,
+        description="Últimas mensagens da conversa, mesmo formato do /chat.",
+    )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="Identificador da conversa no frontend (para rastreabilidade futura).",
+    )
+    n_results: int = Field(5, ge=1, le=15)
+    category: Optional[str] = Field(default=None, description="Filtra por categoria.")
+    regulation: Optional[str] = Field(default=None, description="Filtra por tag de regulamento (ex: MDR, AI_Act).")
+    theme: Optional[str] = Field(default=None, description="Filtra por tema (ex: clinical, software, risk).")
+
+    @field_validator("question")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("A pergunta não pode estar vazia.")
+        return cleaned
+
+
+class TemplatePrerequisite(BaseModel):
+    id: str
+    name: str
+    category: str
+
+
+class TemplateSuggestion(BaseModel):
+    template: TemplateRecordModel
+    score: Optional[float] = Field(default=None, description="Score [0,1] do retrieval semântico.")
+    matched_regulations: List[str] = Field(
+        default_factory=list,
+        description="Regulamentos do template mencionados explicitamente na conversa.",
+    )
+    matched_themes: List[str] = Field(
+        default_factory=list,
+        description="Temas do template mencionados explicitamente na conversa.",
+    )
+    prerequisites: List[TemplatePrerequisite] = Field(
+        default_factory=list,
+        description="Documentos dos quais este template depende (dependencies).",
+    )
+    rationale: str = Field(
+        ...,
+        description="Frase legível a explicar porque o template foi sugerido.",
+    )
+
+
+class SuggestionResponse(BaseModel):
+    context_query: str = Field(
+        ...,
+        description="Texto efetivamente usado para a pesquisa semântica.",
+    )
+    detected_regulations: List[str] = Field(
+        default_factory=list,
+        description="Regulamentos detetados explicitamente na conversa.",
+    )
+    detected_themes: List[str] = Field(
+        default_factory=list,
+        description="Temas regulatórios detetados explicitamente na conversa.",
+    )
+    suggestions: List[TemplateSuggestion]
+
+
+@app.post(
+    "/chat/suggestions",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=SuggestionResponse,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_200_OK,
+    tags=["Copilot"],
+    summary="Sugestões contextuais de templates para a conversa atual",
+    description=(
+        "Recebe a pergunta atual e o histórico recente do chat e devolve até N "
+        "templates relevantes, com score semântico, regulamentos e temas "
+        "explicitamente discutidos, e rationale legível.\n\n"
+        "Pensado para ser chamado em paralelo com `/chat` pelo frontend, sem "
+        "interferir com o fluxo conversacional/regulatório existente. Se a "
+        "collection ChromaDB de templates ainda não estiver indexada, é criada "
+        "automaticamente no primeiro pedido."
+    ),
+    operation_id="post_chat_suggestions",
+)
+def chat_suggestions(payload: SuggestionRequest) -> SuggestionResponse:
+    try:
+        result = suggest_templates(
+            question=payload.question,
+            history=payload.history or [],
+            n_results=payload.n_results,
+            category=payload.category,
+            regulation=payload.regulation,
+            theme=payload.theme,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao gerar sugestões: {exc}",
+        )
+
+    return SuggestionResponse(
+        context_query=result["context_query"],
+        detected_regulations=result["detected_regulations"],
+        detected_themes=result["detected_themes"],
+        suggestions=[TemplateSuggestion(**s) for s in result["suggestions"]],
+    )
+
+
+@app.get(
+    "/chat/suggestions/taxonomy",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Copilot"],
+    summary="Taxonomia conhecida pelo orchestrator (regulamentos, temas, aliases).",
+    operation_id="get_chat_suggestions_taxonomy",
+)
+def chat_suggestions_taxonomy() -> Dict[str, Any]:
+    return orchestrator_taxonomy()
+
+
+# ===========================================================================
+# Context Memory — perfis de produto, campos extraídos, documentos, estado
+# ===========================================================================
+class ProductProfileModel(BaseModel):
+    id: str
+    user_id: str
+    conversation_id: Optional[str] = None
+    name: Optional[str] = None
+    mdr_class: Optional[str] = Field(default=None, pattern="^(I|IIa|IIb|III)$")
+    ai_system_flag: Optional[bool] = None
+    summary: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ProductProfileCreateRequest(BaseModel):
+    name: Optional[str] = None
+    conversation_id: Optional[str] = None
+    mdr_class: Optional[str] = Field(default=None, pattern="^(I|IIa|IIb|III)$")
+    ai_system_flag: Optional[bool] = None
+    summary: Optional[str] = None
+
+
+class ProductProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    mdr_class: Optional[str] = Field(default=None, pattern="^(I|IIa|IIb|III)$")
+    ai_system_flag: Optional[bool] = None
+    summary: Optional[str] = None
+
+
+class ExtractedFieldModel(BaseModel):
+    id: str
+    product_profile_id: str
+    field_key: str
+    field_value: Optional[str] = None
+    source: str
+    confidence: Optional[float] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class FieldSetRequest(BaseModel):
+    field_value: Optional[str] = None
+    source: str = Field(default="manual", pattern="^(conversation|manual|document|analysis|llm)$")
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class DocumentInstanceModel(BaseModel):
+    id: str
+    product_profile_id: str
+    template_id: str
+    state: str
+    file_path: Optional[str] = None
+    download_name: Optional[str] = None
+    notes: Optional[str] = None
+    last_review_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class DocumentInstanceCreateRequest(BaseModel):
+    template_id: str = Field(..., min_length=1)
+    state: str = Field(default="draft", pattern="^(draft|partial|awaiting|reviewed|approved|exported)$")
+    notes: Optional[str] = None
+
+
+class DocumentInstanceUpdateRequest(BaseModel):
+    state: Optional[str] = Field(default=None, pattern="^(draft|partial|awaiting|reviewed|approved|exported)$")
+    file_path: Optional[str] = None
+    download_name: Optional[str] = None
+    notes: Optional[str] = None
+    mark_reviewed: bool = False
+
+
+class DocumentationStateModel(BaseModel):
+    product_profile_id: str
+    missing_information: List[Dict[str, Any]] = Field(default_factory=list)
+    pending_sections: Dict[str, Any] = Field(default_factory=dict)
+    progress_percent: Optional[int] = None
+    notes: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ExtractRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="Excerto de conversa de onde extrair informação.")
+    field_keys: Optional[List[str]] = Field(
+        default=None,
+        description="Lista de chaves canónicas a extrair. Omitir para usar o set por defeito.",
+    )
+    persist: bool = Field(
+        default=False,
+        description="Se True, persiste os campos extraídos com source='llm'. Caso contrário só devolve.",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Texto não pode estar vazio.")
+        return cleaned
+
+
+class ExtractResponse(BaseModel):
+    extracted: Dict[str, Optional[str]] = Field(
+        ...,
+        description="Campos extraídos pelo LLM. `null` significa que não havia informação.",
+    )
+    persisted_keys: List[str] = Field(
+        default_factory=list,
+        description="Chaves que foram efetivamente persistidas em extracted_fields.",
+    )
+
+
+# ---- Profiles -------------------------------------------------------------
+
+@app.get(
+    "/memory/profiles",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=List[ProductProfileModel],
+    tags=["Memória"],
+    summary="Listar perfis de produto do utilizador.",
+    operation_id="get_memory_profiles",
+)
+def memory_list_profiles(
+    limit: int = Query(50, ge=1, le=200),
+    user: AuthUser = Depends(require_chatbot_access),
+) -> List[ProductProfileModel]:
+    try:
+        return [ProductProfileModel(**p) for p in cm_list_profiles(user_id=user.id, limit=limit)]
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro a listar perfis: {exc}")
+
+
+@app.post(
+    "/memory/profiles",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=ProductProfileModel,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Memória"],
+    summary="Criar (ou obter) perfil de produto para a conversa atual.",
+    description=(
+        "Se `conversation_id` for fornecido e já existir um perfil para essa conversa, "
+        "devolve-o; caso contrário cria um novo. Sem `conversation_id` cria sempre novo."
+    ),
+    operation_id="post_memory_profile_create",
+)
+def memory_create_profile(
+    payload: ProductProfileCreateRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> ProductProfileModel:
+    try:
+        if payload.conversation_id:
+            profile = get_or_create_profile_for_conversation(
+                user_id=user.id,
+                conversation_id=payload.conversation_id,
+            )
+            # Aplica overrides opcionais à entrada existente/nova
+            if any(v is not None for v in (payload.name, payload.mdr_class, payload.ai_system_flag, payload.summary)):
+                profile = update_profile_core(
+                    profile_id=profile["id"],
+                    user_id=user.id,
+                    name=payload.name,
+                    mdr_class=payload.mdr_class,
+                    ai_system_flag=payload.ai_system_flag,
+                    summary=payload.summary,
+                )
+            return ProductProfileModel(**profile)
+
+        profile = cm_create_profile(
+            user_id=user.id,
+            conversation_id=payload.conversation_id,
+            name=payload.name,
+            mdr_class=payload.mdr_class,
+            ai_system_flag=payload.ai_system_flag,
+            summary=payload.summary,
+        )
+        return ProductProfileModel(**profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro a criar perfil: {exc}")
+
+
+@app.get(
+    "/memory/profiles/{profile_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Memória"],
+    summary="Snapshot completo do perfil (core + fields + documentos + estado).",
+    operation_id="get_memory_profile_snapshot",
+)
+def memory_get_profile(
+    profile_id: str = FPath(...),
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return get_profile_snapshot(profile_id=profile_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@app.patch(
+    "/memory/profiles/{profile_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=ProductProfileModel,
+    tags=["Memória"],
+    summary="Atualizar campos core do perfil.",
+    operation_id="patch_memory_profile",
+)
+def memory_update_profile(
+    profile_id: str,
+    payload: ProductProfileUpdateRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> ProductProfileModel:
+    try:
+        return ProductProfileModel(
+            **update_profile_core(
+                profile_id=profile_id,
+                user_id=user.id,
+                name=payload.name,
+                mdr_class=payload.mdr_class,
+                ai_system_flag=payload.ai_system_flag,
+                summary=payload.summary,
+            )
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@app.delete(
+    "/memory/profiles/{profile_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Memória"],
+    summary="Apagar perfil e tudo o que está associado (CASCADE).",
+    operation_id="delete_memory_profile",
+)
+def memory_delete_profile(
+    profile_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> None:
+    try:
+        cm_delete_profile(profile_id=profile_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ---- Fields ---------------------------------------------------------------
+
+@app.get(
+    "/memory/profiles/{profile_id}/fields",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=List[ExtractedFieldModel],
+    tags=["Memória"],
+    summary="Listar todos os campos extraídos de um perfil.",
+    operation_id="get_memory_profile_fields",
+)
+def memory_list_fields(
+    profile_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> List[ExtractedFieldModel]:
+    try:
+        return [ExtractedFieldModel(**f) for f in cm_list_fields(profile_id=profile_id, user_id=user.id)]
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@app.put(
+    "/memory/profiles/{profile_id}/fields/{field_key}",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=ExtractedFieldModel,
+    tags=["Memória"],
+    summary="Definir ou atualizar um campo extraído (upsert).",
+    operation_id="put_memory_profile_field",
+)
+def memory_set_field(
+    profile_id: str,
+    field_key: str,
+    payload: FieldSetRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> ExtractedFieldModel:
+    try:
+        return ExtractedFieldModel(
+            **cm_set_field(
+                profile_id=profile_id,
+                user_id=user.id,
+                field_key=field_key,
+                field_value=payload.field_value,
+                source=payload.source,
+                confidence=payload.confidence,
+            )
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@app.delete(
+    "/memory/profiles/{profile_id}/fields/{field_key}",
+    dependencies=[Depends(require_chatbot_access)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Memória"],
+    summary="Apagar um campo extraído.",
+    operation_id="delete_memory_profile_field",
+)
+def memory_delete_field(
+    profile_id: str,
+    field_key: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> None:
+    try:
+        cm_delete_field(profile_id=profile_id, user_id=user.id, field_key=field_key)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@app.get(
+    "/memory/fields/catalog",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Memória"],
+    summary="Listar campos canónicos derivados do registry e onde são usados.",
+    operation_id="get_memory_fields_catalog",
+)
+def memory_fields_catalog() -> Dict[str, Any]:
+    keys = canonical_field_keys()
+    return {
+        "field_keys": keys,
+        "usage": {k: templates_using_field(k) for k in keys},
+    }
+
+
+# ---- Document instances ---------------------------------------------------
+
+@app.post(
+    "/memory/profiles/{profile_id}/documents",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=DocumentInstanceModel,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Memória"],
+    summary="Iniciar uma instância de documento para o perfil.",
+    operation_id="post_memory_profile_document",
+)
+def memory_create_instance(
+    profile_id: str,
+    payload: DocumentInstanceCreateRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> DocumentInstanceModel:
+    try:
+        # valida que o template existe no registry
+        get_record(payload.template_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Template '{payload.template_id}' não existe.")
+
+    try:
+        return DocumentInstanceModel(
+            **cm_create_instance(
+                profile_id=profile_id,
+                user_id=user.id,
+                template_id=payload.template_id,
+                state=payload.state,
+                notes=payload.notes,
+            )
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@app.get(
+    "/memory/profiles/{profile_id}/documents",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=List[DocumentInstanceModel],
+    tags=["Memória"],
+    summary="Listar instâncias de documentos de um perfil.",
+    operation_id="get_memory_profile_documents",
+)
+def memory_list_instances(
+    profile_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> List[DocumentInstanceModel]:
+    try:
+        return [DocumentInstanceModel(**d) for d in cm_list_instances(profile_id=profile_id, user_id=user.id)]
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@app.patch(
+    "/memory/documents/{instance_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=DocumentInstanceModel,
+    tags=["Memória"],
+    summary="Atualizar estado/notas/ficheiro de uma instância.",
+    operation_id="patch_memory_document",
+)
+def memory_update_instance(
+    instance_id: str,
+    payload: DocumentInstanceUpdateRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> DocumentInstanceModel:
+    try:
+        return DocumentInstanceModel(
+            **cm_update_instance(
+                instance_id=instance_id,
+                user_id=user.id,
+                state=payload.state,
+                file_path=payload.file_path,
+                download_name=payload.download_name,
+                notes=payload.notes,
+                mark_reviewed=payload.mark_reviewed,
+            )
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@app.delete(
+    "/memory/documents/{instance_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Memória"],
+    summary="Apagar instância de documento.",
+    operation_id="delete_memory_document",
+)
+def memory_delete_instance(
+    instance_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> None:
+    try:
+        cm_delete_instance(instance_id=instance_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# ---- Documentation state + extraction -------------------------------------
+
+@app.post(
+    "/memory/profiles/{profile_id}/state/recompute",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=DocumentationStateModel,
+    tags=["Memória"],
+    summary="Recalcular o snapshot de estado documental a partir do registry + fields atuais.",
+    operation_id="post_memory_recompute_state",
+)
+def memory_recompute_state(
+    profile_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> DocumentationStateModel:
+    try:
+        return DocumentationStateModel(**recompute_documentation_state(profile_id=profile_id, user_id=user.id))
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@app.post(
+    "/memory/profiles/{profile_id}/extract",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=ExtractResponse,
+    tags=["Memória"],
+    summary="Extrair campos canónicos de um excerto de conversa (opt-in LLM).",
+    description=(
+        "Usa o LLM (Ollama, modelo `OLLAMA_CHAT_MODEL`) para inferir campos canónicos a "
+        "partir de um excerto. Por defeito não persiste; passar `persist=true` para gravar "
+        "os campos não-nulos em `extracted_fields` com source='llm'."
+    ),
+    operation_id="post_memory_extract_fields",
+)
+def memory_extract_fields(
+    profile_id: str,
+    payload: ExtractRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> ExtractResponse:
+    # valida ownership do profile primeiro
+    try:
+        cm_get_profile(profile_id=profile_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    try:
+        extracted = extract_fields_from_text(payload.text, field_keys=payload.field_keys)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Falha do extrator LLM: {exc}",
+        )
+
+    persisted: List[str] = []
+    if payload.persist:
+        for key, value in extracted.items():
+            if not value:
+                continue
+            try:
+                cm_set_field(
+                    profile_id=profile_id,
+                    user_id=user.id,
+                    field_key=key,
+                    field_value=value,
+                    source="llm",
+                )
+                persisted.append(key)
+            except Exception:
+                continue
+
+    return ExtractResponse(extracted=extracted, persisted_keys=persisted)
+
+
+# ===========================================================================
+# Auto-fill Engine — geração de .docx pré-preenchido a partir do Context Memory
+# ===========================================================================
+class CoverageModel(BaseModel):
+    total: int
+    filled: int
+    coverage_pct: int
+    missing: List[str] = Field(default_factory=list)
+    missing_human_required: List[str] = Field(default_factory=list)
+    missing_auto_fillable: List[str] = Field(default_factory=list)
+
+
+class AutofillResult(BaseModel):
+    instance: DocumentInstanceModel
+    template: Dict[str, Any]
+    coverage: CoverageModel
+    replacement_report: Dict[str, Any]
+    previous_state: str
+    new_state: str
+
+
+@app.post(
+    "/memory/documents/{instance_id}/autofill",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=AutofillResult,
+    tags=["Memória"],
+    summary="Gerar .docx pré-preenchido para uma instância de documento.",
+    description=(
+        "Cruza os `extracted_fields` do perfil com os `auto_fillable_fields`/"
+        "`human_required_fields` do template. Substitui placeholders `{{field_key}}` "
+        "no corpo do .docx e insere um cover sheet com o contexto conhecido. "
+        "Atualiza o estado da instância para `partial`/`awaiting` conforme a cobertura."
+    ),
+    operation_id="post_memory_document_autofill",
+)
+def memory_document_autofill(
+    instance_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> AutofillResult:
+    try:
+        result = autofill_instance(instance_id=instance_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except AutofillError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro no auto-fill: {exc}",
+        )
+    return AutofillResult(
+        instance=DocumentInstanceModel(**result["instance"]),
+        template=result["template"],
+        coverage=CoverageModel(**result["coverage"]),
+        replacement_report=result["replacement_report"],
+        previous_state=result["previous_state"],
+        new_state=result["new_state"],
+    )
+
+
+@app.get(
+    "/memory/documents/{instance_id}/download",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Memória"],
+    summary="Descarregar o .docx gerado pela última execução de auto-fill.",
+    operation_id="get_memory_document_download",
+)
+def memory_document_download(
+    instance_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+):
+    try:
+        path = get_generated_file_path(instance_id=instance_id, user_id=user.id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    return FileResponse(
+        path=str(path),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=path.name,
+    )
+
+
+@app.post(
+    "/memory/profiles/{profile_id}/autofill-all",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Memória"],
+    summary="Auto-fill em bulk para todas as instâncias de um perfil.",
+    description="Itera todas as document_instances do perfil. Retorna lista mista (ok/erro por instância).",
+    operation_id="post_memory_profile_autofill_all",
+)
+def memory_profile_autofill_all(
+    profile_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> List[Dict[str, Any]]:
+    try:
+        return autofill_all_for_profile(profile_id=profile_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro no bulk auto-fill: {exc}",
+        )
+
+
+# ===========================================================================
+# Workflow Engine — dependências entre templates + paths recomendados
+# ===========================================================================
+class WorkflowApplyRequest(BaseModel):
+    template_ids: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Lista explícita de template_ids a criar. Se omisso, usa a recomendação "
+            "automática do perfil."
+        ),
+    )
+
+
+@app.get(
+    "/templates/{template_id}/dependencies",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Workflow"],
+    summary="Grafo de dependências e downstream de um template.",
+    description=(
+        "Devolve para o template:\n"
+        "- `direct_dependencies` / `direct_feeds_into` (1 hop, do registry)\n"
+        "- `transitive_dependencies` (todos os pré-requisitos, em ordem topológica)\n"
+        "- `transitive_downstream` (todos os documentos que dependem deste)"
+    ),
+    operation_id="get_template_dependencies",
+)
+def template_dependencies(template_id: str = FPath(...)) -> Dict[str, Any]:
+    try:
+        return get_template_dependency_view(template_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Template '{template_id}' não existe.")
+
+
+@app.get(
+    "/memory/profiles/{profile_id}/workflow",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Workflow"],
+    summary="Workflow recomendado + validação para o perfil atual.",
+    description=(
+        "Cruza o contexto do perfil (classe MDR, uso de IA, presença de software) "
+        "com os blocos de workflow predefinidos e devolve a sequência completa, "
+        "marcando quais templates já foram iniciados e quais faltam. Adiciona "
+        "warnings sobre dependências em falta entre instâncias já iniciadas."
+    ),
+    operation_id="get_memory_profile_workflow",
+)
+def memory_profile_workflow(
+    profile_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return workflow_for_profile(profile_id=profile_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro a calcular workflow: {exc}",
+        )
+
+
+@app.post(
+    "/memory/profiles/{profile_id}/workflow/apply",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Workflow"],
+    summary="Criar em bulk as document_instances do workflow recomendado.",
+    description=(
+        "Cria automaticamente as instâncias para os templates do path recomendado "
+        "que ainda não existam no perfil. Aceita também uma lista explícita de "
+        "`template_ids` para aplicar um subset."
+    ),
+    operation_id="post_memory_profile_workflow_apply",
+)
+def memory_profile_workflow_apply(
+    profile_id: str,
+    payload: WorkflowApplyRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return apply_workflow(
+            profile_id=profile_id,
+            user_id=user.id,
+            template_ids=payload.template_ids,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro a aplicar workflow: {exc}",
+        )
+
+
+# ===========================================================================
+# Chat questionnaire — preenchimento conversacional turn-by-turn
+# ===========================================================================
+class QuestionnaireStartRequest(BaseModel):
+    conversation_id: Optional[str] = Field(default=None, description="ID da conversa do frontend.")
+    template_ids: List[str] = Field(..., min_length=1, description="Templates a preencher juntos.")
+
+
+class QuestionnaireAnswerRequest(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    answer: str = Field(..., description="Resposta do utilizador à pergunta atual; vazio ou 'skip' para saltar.")
+
+
+@app.post(
+    "/chat/questionnaire/start",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Copilot"],
+    summary="Iniciar preenchimento conversacional de um ou mais templates.",
+    description=(
+        "Cria uma sessão de questionário em memória. Calcula a fila de campos "
+        "necessários (auto_fillable ∪ human_required) deduplicada entre templates, "
+        "salta campos já preenchidos no perfil, e devolve a próxima pergunta. "
+        "Se já estiver tudo preenchido, dispara o auto-fill imediatamente."
+    ),
+    operation_id="post_chat_questionnaire_start",
+)
+def chat_questionnaire_start(
+    payload: QuestionnaireStartRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return start_questionnaire(
+            user_id=user.id,
+            conversation_id=payload.conversation_id,
+            template_ids=payload.template_ids,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro a iniciar questionário: {exc}",
+        )
+
+
+@app.post(
+    "/chat/questionnaire/answer",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Copilot"],
+    summary="Responder à pergunta atual; devolve a próxima ou completa o fluxo.",
+    operation_id="post_chat_questionnaire_answer",
+)
+def chat_questionnaire_answer(
+    payload: QuestionnaireAnswerRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return answer_current_question(
+            session_id=payload.session_id,
+            user_id=user.id,
+            answer_text=payload.answer,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro a processar resposta: {exc}",
+        )
+
+
+@app.get(
+    "/chat/questionnaire/{session_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Copilot"],
+    summary="Estado atual de uma sessão de questionário.",
+    operation_id="get_chat_questionnaire_state",
+)
+def chat_questionnaire_get_state(
+    session_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return questionnaire_state(session_id=session_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+
+@app.delete(
+    "/chat/questionnaire/{session_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Copilot"],
+    summary="Cancelar uma sessão de questionário.",
+    operation_id="delete_chat_questionnaire",
+)
+def chat_questionnaire_delete(
+    session_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return questionnaire_cancel(session_id=session_id, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))

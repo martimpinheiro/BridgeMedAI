@@ -1127,7 +1127,205 @@ function UserBubble({ content }) {
   );
 }
 
-function AssistantCard({ content, meta, isLast }) {
+function DocumentSuggestionsInline({ suggestions, onStart, onDownload }) {
+  if (!suggestions?.length) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: 18,
+        paddingTop: 16,
+        borderTop: "1px dashed rgba(31,59,46,0.18)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: 10.5,
+          letterSpacing: 0.22,
+          textTransform: "uppercase",
+          color: "var(--ink-faded)",
+          marginBottom: 10,
+        }}
+      >
+        Documentos recomendados para isto
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {suggestions.map((s) => {
+          const tpl = s.template || {};
+          return (
+            <div
+              key={tpl.id}
+              style={{
+                background: "var(--cream)",
+                border: "1px solid var(--cream-edge)",
+                borderRadius: 12,
+                padding: "14px 16px",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 9.5,
+                  letterSpacing: 0.2,
+                  textTransform: "uppercase",
+                  color: "var(--ink-faded)",
+                  marginBottom: 4,
+                }}
+              >
+                {tpl.category}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--display)",
+                  fontSize: 16,
+                  fontWeight: 500,
+                  color: "var(--forest-deep)",
+                  lineHeight: 1.25,
+                  marginBottom: 4,
+                }}
+              >
+                {tpl.name}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  color: "var(--ink-faded)",
+                  letterSpacing: 0.05,
+                  marginBottom: 10,
+                }}
+              >
+                {tpl.id} · {tpl.doc_type}
+              </div>
+              {s.rationale && (
+                <div
+                  style={{
+                    fontFamily: "var(--display)",
+                    fontStyle: "italic",
+                    fontSize: 12.5,
+                    color: "var(--ink-muted)",
+                    lineHeight: 1.5,
+                    marginBottom: 12,
+                    paddingLeft: 10,
+                    borderLeft: "2px solid var(--sage-deep)",
+                  }}
+                >
+                  {s.rationale}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => onStart?.([tpl.id])}
+                  style={{
+                    appearance: "none",
+                    background: "var(--forest)",
+                    color: "var(--cream)",
+                    border: "1px solid var(--forest)",
+                    borderRadius: 999,
+                    padding: "8px 14px",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10.5,
+                    letterSpacing: 0.14,
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  Preencher por mim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDownload?.(tpl.id, `${tpl.id}_${tpl.name}.docx`)}
+                  style={{
+                    appearance: "none",
+                    background: "transparent",
+                    color: "var(--forest-deep)",
+                    border: "1px solid rgba(31,59,46,0.18)",
+                    borderRadius: 999,
+                    padding: "8px 14px",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10.5,
+                    letterSpacing: 0.14,
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  Descarregar template
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GeneratedFilesInline({ files, onDownload }) {
+  if (!files?.length) return null;
+  const ok = files.filter((f) => f.ok);
+  if (!ok.length) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: 18,
+        paddingTop: 16,
+        borderTop: "1px dashed rgba(31,59,46,0.18)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: 10.5,
+          letterSpacing: 0.22,
+          textTransform: "uppercase",
+          color: "var(--ink-faded)",
+        }}
+      >
+        Documentos gerados
+      </div>
+      {ok.map((f) => (
+        <button
+          key={f.instance_id}
+          type="button"
+          onClick={() => onDownload?.(f.instance_id, f.download_name)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "var(--sage-light)",
+            border: "1px solid var(--sage-deep)",
+            color: "var(--forest-deep)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            cursor: "pointer",
+            fontFamily: "var(--body)",
+            fontSize: 13,
+            textAlign: "left",
+          }}
+        >
+          <span>
+            <strong>{f.template_name}</strong>
+            <span style={{ marginLeft: 8, color: "var(--ink-muted)", fontSize: 11 }}>
+              {f.coverage_pct != null ? `${f.coverage_pct}% preenchido` : ""}
+            </span>
+          </span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: 0.1 }}>
+            descarregar ↓
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AssistantCard({ content, meta, isLast, onStartQuestionnaire, onDownloadTemplate, onDownloadGenerated }) {
   return (
     <div className="bmai-rise" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
       <div
@@ -1189,6 +1387,19 @@ function AssistantCard({ content, meta, isLast }) {
             <SourcesChecklist
               retrieved={meta.retrieved_sources || []}
               generation={meta.generation_sources || []}
+            />
+          )}
+          {meta?.document_suggestions?.length > 0 && (
+            <DocumentSuggestionsInline
+              suggestions={meta.document_suggestions}
+              onStart={onStartQuestionnaire}
+              onDownload={onDownloadTemplate}
+            />
+          )}
+          {meta?.generated_files?.length > 0 && (
+            <GeneratedFilesInline
+              files={meta.generated_files}
+              onDownload={onDownloadGenerated}
             />
           )}
         </div>
@@ -2428,6 +2639,12 @@ export default function ChatbotApp() {
     error: "",
   });
 
+  // Estado do questionário inline (preenchimento conversacional de templates).
+  // Quando uma sessão está ativa, as próximas mensagens do utilizador são
+  // encaminhadas para /chat/questionnaire/answer em vez de /chat normal.
+  // Estrutura: { sessionId, templateIds, currentField, progress }
+  const [questionnaire, setQuestionnaire] = useState(null);
+
   const [conversations, setConversations] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -2796,10 +3013,193 @@ export default function ChatbotApp() {
     });
   }
 
+  // ---- Questionnaire (preenchimento conversacional) -----------------------
+  function _formatQuestionMessage(state) {
+    const t = (state.templates || []).map((t) => t.name).join(", ");
+    const progress = state.progress
+      ? ` · ${state.progress.answered}/${state.progress.total} respondidas (${state.progress.percent}%)`
+      : "";
+    const hint = state.hint ? `\n\n_${state.hint}_` : "";
+    return `**${state.question}**${hint}\n\n_(A preencher: ${t}${progress})_\n\nResponde abaixo. Podes escrever \`saltar\` para deixar este campo em branco e ir para o seguinte.`;
+  }
+
+  function _formatCompletionMessage(state) {
+    const files = state.generated_files || [];
+    const ok = files.filter((f) => f.ok);
+    const fail = files.filter((f) => !f.ok);
+    const lines = [];
+    lines.push("**Pronto.** Gerei a documentação pedida:\n");
+    if (ok.length) {
+      for (const f of ok) {
+        const cov = f.coverage_pct != null ? ` _(${f.coverage_pct}% preenchido)_` : "";
+        lines.push(`- ✓ **${f.template_name}** — \`${f.download_name}\`${cov}`);
+      }
+    }
+    if (fail.length) {
+      lines.push("");
+      for (const f of fail) {
+        lines.push(`- ✗ ${f.template_id}: ${f.error || "erro desconhecido"}`);
+      }
+    }
+    lines.push("");
+    lines.push("Os campos que ficaram por preencher estão marcados com `⚠️` no documento — revê-os antes de submeter.");
+    return lines.join("\n");
+  }
+
+  async function startQuestionnaire(templateIds) {
+    if (!templateIds?.length || !activeConversation) return;
+    setChatState({ loading: true, error: "" });
+    try {
+      const data = await callApi("/chat/questionnaire/start", {
+        method: "POST",
+        body: JSON.stringify({
+          conversation_id: activeConversation.id,
+          template_ids: templateIds,
+        }),
+      });
+
+      if (data.state === "asking") {
+        setQuestionnaire({
+          sessionId: data.session_id,
+          templateIds,
+          currentField: data.current_field,
+          progress: data.progress,
+          downloadLinks: [],
+        });
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: _formatQuestionMessage(data),
+          meta: { intent: "questionnaire" },
+        });
+      } else if (data.state === "completed") {
+        setQuestionnaire(null);
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: _formatCompletionMessage(data),
+          meta: { intent: "questionnaire", generated_files: data.generated_files || [] },
+        });
+      }
+      setChatState({ loading: false, error: "" });
+    } catch (error) {
+      setChatState({ loading: false, error: error.message || "Erro ao iniciar questionário." });
+    }
+  }
+
+  async function submitQuestionnaireAnswer(answerText) {
+    if (!questionnaire?.sessionId || !activeConversation) return;
+
+    const userMessage = { id: crypto.randomUUID(), role: "user", content: answerText };
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === activeConversation.id
+          ? { ...c, messages: [...c.messages, userMessage], updatedAt: new Date().toISOString() }
+          : c
+      )
+    );
+    setInput("");
+    setChatState({ loading: true, error: "" });
+
+    try {
+      const data = await callApi("/chat/questionnaire/answer", {
+        method: "POST",
+        body: JSON.stringify({ session_id: questionnaire.sessionId, answer: answerText }),
+      });
+
+      if (data.state === "asking") {
+        setQuestionnaire((prev) => ({
+          ...prev,
+          currentField: data.current_field,
+          progress: data.progress,
+        }));
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: _formatQuestionMessage(data),
+          meta: { intent: "questionnaire" },
+        });
+      } else if (data.state === "completed") {
+        setQuestionnaire(null);
+        appendMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: _formatCompletionMessage(data),
+          meta: { intent: "questionnaire", generated_files: data.generated_files || [] },
+        });
+      }
+      setChatState({ loading: false, error: "" });
+    } catch (error) {
+      setChatState({ loading: false, error: error.message || "Erro ao processar resposta." });
+    }
+  }
+
+  async function cancelQuestionnaire() {
+    if (!questionnaire?.sessionId) return;
+    try {
+      await callApi(`/chat/questionnaire/${questionnaire.sessionId}`, { method: "DELETE" });
+    } catch (_e) { /* ignore */ }
+    setQuestionnaire(null);
+    appendMessage({
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "_Preenchimento cancelado. Podes continuar a conversa normalmente._",
+      meta: { intent: "questionnaire" },
+    });
+  }
+
+  async function downloadTemplate(templateId, filename) {
+    try {
+      const res = await fetch(
+        `${normalizedBaseUrl}/templates/${encodeURIComponent(templateId)}/download`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!res.ok) throw new Error("Erro a descarregar template.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || `${templateId}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setChatState({ loading: false, error: e.message || "Erro a descarregar." });
+    }
+  }
+
+  async function downloadGenerated(instanceId, filename) {
+    try {
+      const res = await fetch(
+        `${normalizedBaseUrl}/memory/documents/${encodeURIComponent(instanceId)}/download`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!res.ok) throw new Error("Erro a descarregar documento gerado.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "documento.docx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setChatState({ loading: false, error: e.message || "Erro a descarregar." });
+    }
+  }
+
   async function sendMessage(maybeText) {
     const question = (maybeText ?? input).trim();
     const history = buildConversationHistory(activeConversation?.messages || []);
     if (!question || !activeConversation || chatState.loading) return;
+
+    // Se há um questionário ativo, a próxima mensagem é resposta a uma pergunta.
+    if (questionnaire?.sessionId) {
+      await submitQuestionnaireAnswer(question);
+      return;
+    }
 
     const regulatory = activeConversation.regulatory;
     const regulatoryStep = regulatory?.step;
@@ -2835,11 +3235,15 @@ export default function ChatbotApp() {
     return;
 }
 
-
-if (shouldStartRegulatoryFlow(question)) {
-  await sendRegulatoryMessage(question, { startIfNeeded: true });
-  return;
-}
+// NOTA: o auto-trigger do fluxo regulatório legacy (PMCF-only) foi
+// desativado. Todas as descrições passam agora pelo /chat normal que
+// devolve sugestões generalizadas para qualquer template do registry
+// (CER, Risk Management, Cybersecurity, Usability, etc.), não só o PMCF.
+// O comando explícito "gera o pmcf" continua a funcionar acima.
+// if (shouldStartRegulatoryFlow(question)) {
+//   await sendRegulatoryMessage(question, { startIfNeeded: true });
+//   return;
+// }
 
     setChatState({ loading: true, error: "" });
     const userMessage = { id: crypto.randomUUID(), role: "user", content: question };
@@ -2878,6 +3282,7 @@ if (shouldStartRegulatoryFlow(question)) {
           target_docs: data.target_docs || [],
           retrieved_sources: data.retrieved_sources || [],
           generation_sources: data.generation_sources || [],
+          document_suggestions: data.document_suggestions || [],
         },
       };
 
@@ -3468,9 +3873,62 @@ if (shouldStartRegulatoryFlow(question)) {
           <KpiBar meta={currentMeta} />
         )}
 
-        {regulatoryActive && (
-          <RegulatoryStepIndicator step={currentRegulatoryStep || "awaiting_description"} />
+        {questionnaire?.sessionId && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "10px 14px",
+              borderRadius: "var(--r-md)",
+              background: "rgba(31,59,46,0.06)",
+              border: "1px solid rgba(31,59,46,0.18)",
+              fontSize: 12.5,
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 999,
+                  background: "var(--forest)",
+                  display: "inline-block",
+                  animation: "bmai-pulse 1.4s ease-in-out infinite",
+                }}
+              />
+              <span style={{ color: "var(--forest-deep)" }}>
+                <strong>Modo preenchimento ativo.</strong>{" "}
+                {questionnaire.progress
+                  ? `${questionnaire.progress.answered}/${questionnaire.progress.total} respondidas (${questionnaire.progress.percent}%)`
+                  : "A preparar perguntas…"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={cancelQuestionnaire}
+              style={{
+                appearance: "none",
+                background: "transparent",
+                color: "var(--missing)",
+                border: "1px solid rgba(162,45,45,0.3)",
+                borderRadius: 999,
+                padding: "5px 12px",
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                letterSpacing: 0.1,
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
         )}
+
+        {/* Stepper "1 / 2 / 3" removido — visão atual é tudo no chat */}
 
         {chatState.error && (
           <div
@@ -3576,6 +4034,9 @@ if (shouldStartRegulatoryFlow(question)) {
                     content={m.content}
                     meta={m.meta}
                     isLast={isLast}
+                    onStartQuestionnaire={startQuestionnaire}
+                    onDownloadTemplate={downloadTemplate}
+                    onDownloadGenerated={downloadGenerated}
                   />
                 );
               })}

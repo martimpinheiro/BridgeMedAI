@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------------------
+# BridgeMedAI .gitignore
+# ---------------------------------------------------------------------------
+
+# Secrets e config local
+Backend/.env
+Backend/.env.*
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+.venv-wsl/
+venv/
+
+# Node
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.vite/
+
+# ChromaDB runtime data
+Backend/chroma_data/
+Backend/chroma_db/
+
+# Outputs gerados pelo Copilot e regulatory service
+Backend/generated/
+
+# Embeddings locais (pkl) — re-geráveis
+Backend/local_embeddings.pkl
+
+# Uploads de credenciais (privados)
+uploads/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Claude Code metadata
+.claude/

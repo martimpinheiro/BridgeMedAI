@@ -409,7 +409,69 @@ def _split_step1_response(raw: str) -> Tuple[str, Dict[str, Any]]:
             narrative = re.sub(r"\{[\s\S]*\}\s*$", "", narrative)
         else:
             narrative = raw
-    return narrative.strip(), structured or {}
+    return _sanitize_analysis_narrative(narrative.strip()), structured or {}
+
+
+# Frases que sabemos serem instruções do prompt e que modelos pequenos
+# (gemma3:4b, qwen2.5:7b) por vezes copiam verbatim em vez de executar.
+_LEAKED_INSTRUCTION_FRAGMENTS = (
+    "escreve apenas a pergunta",
+    "separa claramente as obrigações",
+    "com hífen longo",
+    "n. título",
+    "exatamente estas subsecções",
+    "não uses asteriscos duplos",
+    "não uses cardinais",
+    "devolves sempre duas secções",
+    "objeto json válido",
+    "indica classe e regra",
+    "indica se é abrangido e a categoria de risco",
+    "cita o(s) artigo(s) relevante(s)",
+    "conforme relevantes",
+)
+
+
+def _sanitize_analysis_narrative(text: str) -> str:
+    """Remove linhas em que o LLM copiou as instruções do prompt em vez de
+    as executar. Tipicamente linhas a começar por 'N. ' (placeholder literal)
+    ou que contêm fragmentos meta-instrucionais conhecidos."""
+    if not text:
+        return text
+
+    out_lines: List[str] = []
+    final_question_seen = False
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        norm = line.strip().lower()
+
+        # 1) Linha começa com "N." (placeholder literal do prompt)
+        if re.match(r"^\s*[N]\.\s+", line):
+            # Se for a "pergunta final", substituímos por uma versão limpa
+            if "pergunta final" in norm or "queres que preencha" in norm:
+                if not final_question_seen:
+                    out_lines.append(
+                        "Queres que preencha o Plano de Follow-Up Clínico "
+                        "Pós-Mercado (PMCF) com base nesta análise?"
+                    )
+                    final_question_seen = True
+            # Caso contrário (ex: "N. Pré-mercado vs..."), descarta a linha
+            continue
+
+        # 2) Linha contém uma frase claramente do prompt
+        if any(frag in norm for frag in _LEAKED_INSTRUCTION_FRAGMENTS):
+            # Tentamos preservar o título da secção se houver algo antes do "—"
+            head = line.split("—", 1)[0].strip(" -*#0123456789.")
+            if head and len(head) < 80:
+                out_lines.append(head)
+            continue
+
+        out_lines.append(line)
+
+    cleaned = "\n".join(out_lines)
+    # Normaliza quebras de linha excessivas
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
 
 
 def _seed_collected_from_analysis(session: RegulatorySession) -> None:

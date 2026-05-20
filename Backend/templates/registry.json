@@ -1,0 +1,1604 @@
+{
+  "$schema_version": "0.1.0",
+  "generated_at": "2026-05-18",
+  "generator": "claude-opus-4-7 seed pass",
+  "notes": "Metadata seed gerada por LLM. Todos os templates têm metadata_status='seed' e devem ser revistos por especialista regulatório antes de serem usados em decisões de produção. Ver README.md.",
+  "field_dictionary_ref": "Os IDs em auto_fillable_fields e human_required_fields são chaves canónicas partilhadas entre templates (ex: 'intended_purpose' é o mesmo campo em TMP-CE-01, TMP-CE-02, TMP-SW-04, TMP-RM-02, etc.) — permite reutilização cross-document pelo Auto-fill Engine.",
+  "tag_taxonomy": {
+    "regulations": [
+      "MDR",
+      "AI_Act",
+      "ISO_13485",
+      "ISO_14971",
+      "ISO_14155",
+      "IEC_62304",
+      "IEC_62366",
+      "IEC_82304",
+      "IEC_81001-5-1",
+      "MEDDEV_2.7.1_rev4",
+      "ISO_27001",
+      "MDCG"
+    ],
+    "themes": [
+      "clinical",
+      "software",
+      "ai",
+      "risk",
+      "cybersecurity",
+      "usability",
+      "qms",
+      "pms",
+      "pmcf",
+      "vigilance",
+      "change_control",
+      "capa",
+      "verification",
+      "validation",
+      "design_controls"
+    ],
+    "doc_types": {
+      "TMP": "Template (content document to be authored)",
+      "FRM": "Form / checklist",
+      "SOP": "Standard Operating Procedure",
+      "LST": "List / tracking spreadsheet"
+    }
+  },
+  "templates": [
+    {
+      "id": "TMP-CE-01",
+      "name": "Clinical Evaluation Report",
+      "file": "Clinical Evaluation/TMP-CE-01_Clinical_Evaluation_Report.docx",
+      "category": "Clinical Evaluation",
+      "doc_type": "TMP",
+      "description": "Relatório de avaliação clínica consolidado conforme MDR Anexo XIV Parte A e MEDDEV 2.7/1 rev 4. Demonstra evidência clínica que suporta a conformidade com GSPRs.",
+      "keywords": [
+        "clinical evaluation",
+        "clinical evidence",
+        "GSPR",
+        "state of the art",
+        "benefit-risk"
+      ],
+      "regulations": [
+        "MDR",
+        "MEDDEV_2.7.1_rev4",
+        "ISO_14155"
+      ],
+      "themes": [
+        "clinical"
+      ],
+      "mandatory_sections": [
+        "scope",
+        "device_description",
+        "intended_purpose",
+        "state_of_the_art",
+        "clinical_data_appraisal",
+        "benefit_risk_analysis",
+        "conclusion"
+      ],
+      "optional_sections": [
+        "equivalence_assessment",
+        "pmcf_results_summary"
+      ],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "indications",
+        "contraindications",
+        "target_population",
+        "device_description",
+        "classification_mdr"
+      ],
+      "human_required_fields": [
+        "clinical_data_appraisal",
+        "benefit_risk_analysis",
+        "conclusion",
+        "state_of_the_art_review"
+      ],
+      "dependencies": [
+        "TMP-CE-02"
+      ],
+      "feeds_into": [
+        "TMP-CE-05",
+        "TMP-RM-03"
+      ],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-CE-02",
+      "name": "Clinical Evaluation Plan",
+      "file": "Clinical Evaluation/TMP-CE-02_Clinical_Evaluation_Plan.docx",
+      "category": "Clinical Evaluation",
+      "doc_type": "TMP",
+      "description": "Plano de avaliação clínica que define âmbito, metodologia, fontes de dados clínicos e critérios de aceitação. Pré-requisito do Clinical Evaluation Report.",
+      "keywords": [
+        "clinical evaluation plan",
+        "literature search strategy",
+        "clinical data sources"
+      ],
+      "regulations": [
+        "MDR",
+        "MEDDEV_2.7.1_rev4"
+      ],
+      "themes": [
+        "clinical"
+      ],
+      "mandatory_sections": [
+        "scope",
+        "device_description",
+        "intended_purpose",
+        "literature_search_strategy",
+        "acceptance_criteria",
+        "team_qualifications"
+      ],
+      "optional_sections": [
+        "equivalence_strategy"
+      ],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "indications",
+        "target_population",
+        "device_description",
+        "classification_mdr"
+      ],
+      "human_required_fields": [
+        "literature_search_strategy",
+        "acceptance_criteria",
+        "team_qualifications"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "TMP-CE-01"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-CE-04",
+      "name": "Literature Search List",
+      "file": "Clinical Evaluation/TMP-CE-04_Literature_Search_List.xlsx",
+      "category": "Clinical Evaluation",
+      "doc_type": "LST",
+      "description": "Tracking de pesquisas de literatura: bases de dados, queries, datas, resultados, inclusão/exclusão. Suporta o Clinical Evaluation Report.",
+      "keywords": [
+        "literature search",
+        "PRISMA",
+        "PubMed",
+        "Embase",
+        "screening"
+      ],
+      "regulations": [
+        "MDR",
+        "MEDDEV_2.7.1_rev4"
+      ],
+      "themes": [
+        "clinical"
+      ],
+      "mandatory_sections": [
+        "search_log",
+        "inclusion_exclusion_criteria",
+        "screening_results"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "search_log",
+        "inclusion_exclusion_criteria",
+        "screening_results"
+      ],
+      "dependencies": [
+        "TMP-CE-02"
+      ],
+      "feeds_into": [
+        "TMP-CE-01"
+      ],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-CE-05",
+      "name": "Post-Market Clinical Follow-Up Plan",
+      "file": "Clinical Evaluation/TMP-CE-05_Post-Market_Clinical_Follow-Up_Plan.docx",
+      "category": "Clinical Evaluation",
+      "doc_type": "TMP",
+      "description": "Plano PMCF conforme MDR Anexo XIV Parte B. Define atividades pós-mercado para confirmar segurança/performance ao longo do ciclo de vida.",
+      "keywords": [
+        "PMCF",
+        "post-market",
+        "real-world evidence",
+        "surveillance"
+      ],
+      "regulations": [
+        "MDR"
+      ],
+      "themes": [
+        "clinical",
+        "pmcf",
+        "pms"
+      ],
+      "mandatory_sections": [
+        "objectives",
+        "methods",
+        "schedule",
+        "endpoints",
+        "data_analysis_plan"
+      ],
+      "optional_sections": [
+        "registry_participation"
+      ],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "indications",
+        "device_description",
+        "classification_mdr",
+        "residual_risks"
+      ],
+      "human_required_fields": [
+        "objectives",
+        "methods",
+        "schedule",
+        "endpoints"
+      ],
+      "dependencies": [
+        "TMP-CE-01",
+        "TMP-RM-03"
+      ],
+      "feeds_into": [
+        "TMP-CE-06"
+      ],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-CE-06",
+      "name": "Post-Market Clinical Follow-Up Report",
+      "file": "Clinical Evaluation/TMP-CE-06_Post-Market_Clinical_Follow-Up_Report.docx",
+      "category": "Clinical Evaluation",
+      "doc_type": "TMP",
+      "description": "Relatório PMCF com resultados das atividades de seguimento clínico pós-mercado. Alimenta a próxima revisão do CER.",
+      "keywords": [
+        "PMCF report",
+        "post-market findings",
+        "safety updates"
+      ],
+      "regulations": [
+        "MDR"
+      ],
+      "themes": [
+        "clinical",
+        "pmcf",
+        "pms"
+      ],
+      "mandatory_sections": [
+        "activities_summary",
+        "findings",
+        "impact_on_benefit_risk",
+        "conclusions"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "device_description"
+      ],
+      "human_required_fields": [
+        "findings",
+        "impact_on_benefit_risk",
+        "conclusions"
+      ],
+      "dependencies": [
+        "TMP-CE-05"
+      ],
+      "feeds_into": [
+        "TMP-CE-01",
+        "TMP-RM-03"
+      ],
+      "workflow_priority": 4,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-RM-01",
+      "name": "Risk Management File",
+      "file": "Risk Management/TMP-RM-01_Risk_Management_File.xlsx",
+      "category": "Risk Management",
+      "doc_type": "LST",
+      "description": "Ficheiro de gestão de risco com hazards, sequências de eventos, situações perigosas, danos, severidade, probabilidade, controlos e riscos residuais conforme ISO 14971.",
+      "keywords": [
+        "FMEA",
+        "hazard analysis",
+        "risk matrix",
+        "residual risk",
+        "risk control"
+      ],
+      "regulations": [
+        "ISO_14971",
+        "MDR"
+      ],
+      "themes": [
+        "risk"
+      ],
+      "mandatory_sections": [
+        "hazard_list",
+        "risk_analysis",
+        "risk_controls",
+        "residual_risk_evaluation"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "user_profiles",
+        "use_environment"
+      ],
+      "human_required_fields": [
+        "hazard_list",
+        "severity_estimates",
+        "probability_estimates",
+        "risk_controls"
+      ],
+      "dependencies": [
+        "TMP-RM-02"
+      ],
+      "feeds_into": [
+        "TMP-RM-03",
+        "TMP-CE-01"
+      ],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-RM-02",
+      "name": "Risk Management Plan",
+      "file": "Risk Management/TMP-RM-02_Risk_Management_Plan.docx",
+      "category": "Risk Management",
+      "doc_type": "TMP",
+      "description": "Plano de gestão de risco conforme ISO 14971: âmbito, responsabilidades, critérios de aceitação de risco, métodos de revisão.",
+      "keywords": [
+        "risk management plan",
+        "acceptability criteria",
+        "ISO 14971"
+      ],
+      "regulations": [
+        "ISO_14971",
+        "MDR"
+      ],
+      "themes": [
+        "risk"
+      ],
+      "mandatory_sections": [
+        "scope",
+        "responsibilities",
+        "risk_acceptability_criteria",
+        "review_methodology"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "device_description",
+        "classification_mdr"
+      ],
+      "human_required_fields": [
+        "risk_acceptability_criteria",
+        "review_methodology",
+        "responsibilities"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "TMP-RM-01",
+        "TMP-RM-03"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-RM-03",
+      "name": "Risk Management Report",
+      "file": "Risk Management/TMP-RM-03_Risk_Management_Report.docx",
+      "category": "Risk Management",
+      "doc_type": "TMP",
+      "description": "Relatório consolidado de gestão de risco demonstrando que riscos residuais são aceitáveis e benefício clínico supera o risco global. ISO 14971 §9.",
+      "keywords": [
+        "risk management report",
+        "overall residual risk",
+        "benefit-risk conclusion"
+      ],
+      "regulations": [
+        "ISO_14971",
+        "MDR"
+      ],
+      "themes": [
+        "risk"
+      ],
+      "mandatory_sections": [
+        "plan_execution_summary",
+        "overall_residual_risk",
+        "benefit_risk_conclusion",
+        "post_production_inputs"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose"
+      ],
+      "human_required_fields": [
+        "overall_residual_risk",
+        "benefit_risk_conclusion"
+      ],
+      "dependencies": [
+        "TMP-RM-01",
+        "TMP-RM-02"
+      ],
+      "feeds_into": [
+        "TMP-CE-01",
+        "TMP-CE-05"
+      ],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-SW-02",
+      "name": "Software Development Plan",
+      "file": "Design and Development/TMP-SW-02_Software_Development_Plan.docx",
+      "category": "Design and Development",
+      "doc_type": "TMP",
+      "description": "Plano de desenvolvimento de software conforme IEC 62304: ciclo de vida, atividades por classe de segurança (A/B/C), recursos, ferramentas.",
+      "keywords": [
+        "software development plan",
+        "SDLC",
+        "IEC 62304",
+        "safety class"
+      ],
+      "regulations": [
+        "IEC_62304",
+        "ISO_13485",
+        "MDR"
+      ],
+      "themes": [
+        "software"
+      ],
+      "mandatory_sections": [
+        "lifecycle_model",
+        "safety_classification",
+        "activities_by_class",
+        "tooling",
+        "configuration_management",
+        "problem_resolution"
+      ],
+      "optional_sections": [
+        "SOUP_management"
+      ],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "software_modules",
+        "safety_class",
+        "ai_capabilities"
+      ],
+      "human_required_fields": [
+        "lifecycle_model",
+        "tooling",
+        "configuration_management"
+      ],
+      "dependencies": [
+        "FRM-SW-09"
+      ],
+      "feeds_into": [
+        "TMP-SW-04",
+        "TMP-SW-05"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-SW-04",
+      "name": "Software Requirements Specifications",
+      "file": "Design and Development/TMP-SW-04_Software_Requirements_Specifications.docx",
+      "category": "Design and Development",
+      "doc_type": "TMP",
+      "description": "SRS conforme IEC 62304 §5.2: requisitos funcionais, performance, interfaces, segurança, dados, regulatórios. Inclui requisitos derivados de riscos.",
+      "keywords": [
+        "SRS",
+        "software requirements",
+        "functional requirements",
+        "non-functional"
+      ],
+      "regulations": [
+        "IEC_62304",
+        "MDR"
+      ],
+      "themes": [
+        "software",
+        "design_controls"
+      ],
+      "mandatory_sections": [
+        "functional_requirements",
+        "performance_requirements",
+        "interface_requirements",
+        "safety_requirements",
+        "data_requirements",
+        "regulatory_requirements"
+      ],
+      "optional_sections": [
+        "ai_specific_requirements"
+      ],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "software_modules",
+        "ai_capabilities",
+        "user_profiles",
+        "indications"
+      ],
+      "human_required_fields": [
+        "functional_requirements",
+        "performance_requirements",
+        "safety_requirements"
+      ],
+      "dependencies": [
+        "TMP-SW-02",
+        "TMP-IU-02"
+      ],
+      "feeds_into": [
+        "TMP-SW-05",
+        "TMP-SW-06",
+        "FRM-SW-01"
+      ],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-SW-05",
+      "name": "Software Architecture",
+      "file": "Design and Development/TMP-SW-05_Software_Architecture.docx",
+      "category": "Design and Development",
+      "doc_type": "TMP",
+      "description": "Arquitetura de software conforme IEC 62304 §5.3: decomposição em itens, interfaces, SOUP, segregação por classe de segurança.",
+      "keywords": [
+        "software architecture",
+        "components",
+        "SOUP",
+        "interfaces"
+      ],
+      "regulations": [
+        "IEC_62304",
+        "MDR"
+      ],
+      "themes": [
+        "software",
+        "design_controls"
+      ],
+      "mandatory_sections": [
+        "overview",
+        "component_decomposition",
+        "interfaces",
+        "SOUP_list",
+        "safety_segregation"
+      ],
+      "optional_sections": [
+        "ai_model_architecture",
+        "data_flow_diagrams"
+      ],
+      "auto_fillable_fields": [
+        "software_modules",
+        "ai_capabilities",
+        "intended_purpose"
+      ],
+      "human_required_fields": [
+        "component_decomposition",
+        "SOUP_list",
+        "safety_segregation"
+      ],
+      "dependencies": [
+        "TMP-SW-04"
+      ],
+      "feeds_into": [
+        "TMP-SW-06",
+        "TMP-SW-08",
+        "TMP-RM-01"
+      ],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-SW-06",
+      "name": "System Test Protocol",
+      "file": "Design and Development/TMP-SW-06_System_Test_Protocol.xlsx",
+      "category": "Design and Development",
+      "doc_type": "LST",
+      "description": "Protocolo de testes de sistema com matriz de cobertura requisito-teste-resultado conforme IEC 62304 §5.7.",
+      "keywords": [
+        "system test",
+        "verification",
+        "test protocol",
+        "traceability matrix"
+      ],
+      "regulations": [
+        "IEC_62304",
+        "MDR"
+      ],
+      "themes": [
+        "software",
+        "verification",
+        "validation"
+      ],
+      "mandatory_sections": [
+        "test_cases",
+        "traceability_matrix",
+        "pass_fail_criteria",
+        "results"
+      ],
+      "optional_sections": [
+        "ai_performance_tests"
+      ],
+      "auto_fillable_fields": [
+        "software_modules",
+        "intended_purpose"
+      ],
+      "human_required_fields": [
+        "test_cases",
+        "pass_fail_criteria",
+        "results"
+      ],
+      "dependencies": [
+        "TMP-SW-04",
+        "TMP-SW-05"
+      ],
+      "feeds_into": [
+        "FRM-SW-05"
+      ],
+      "workflow_priority": 4,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-SW-08",
+      "name": "Cybersecurity",
+      "file": "Cybersecurity/TMP-SW-08_Cybersecurity.docx",
+      "category": "Cybersecurity",
+      "doc_type": "TMP",
+      "description": "Documentação de cibersegurança conforme IEC 81001-5-1 e MDCG 2019-16: threat model, controlos, SBOM, vulnerability management, secure update.",
+      "keywords": [
+        "cybersecurity",
+        "threat model",
+        "SBOM",
+        "secure boot",
+        "vulnerability management"
+      ],
+      "regulations": [
+        "IEC_81001-5-1",
+        "MDR",
+        "MDCG",
+        "ISO_27001"
+      ],
+      "themes": [
+        "cybersecurity",
+        "software"
+      ],
+      "mandatory_sections": [
+        "threat_model",
+        "security_controls",
+        "SBOM",
+        "vulnerability_management",
+        "incident_response",
+        "secure_update_process"
+      ],
+      "optional_sections": [
+        "ai_model_security"
+      ],
+      "auto_fillable_fields": [
+        "software_modules",
+        "intended_purpose",
+        "use_environment",
+        "ai_capabilities"
+      ],
+      "human_required_fields": [
+        "threat_model",
+        "security_controls",
+        "vulnerability_management",
+        "incident_response"
+      ],
+      "dependencies": [
+        "TMP-SW-05"
+      ],
+      "feeds_into": [
+        "TMP-RM-01"
+      ],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-TD-03",
+      "name": "General Safety and Performance Requirements",
+      "file": "Design and Development/TMP-TD-03_General_Safety_and_Performance_Requirements.docx",
+      "category": "Design and Development",
+      "doc_type": "TMP",
+      "description": "Checklist GSPR conforme MDR Anexo I: aplicabilidade, evidência de conformidade, normas harmonizadas/CS.",
+      "keywords": [
+        "GSPR",
+        "Annex I",
+        "harmonized standards",
+        "common specifications"
+      ],
+      "regulations": [
+        "MDR"
+      ],
+      "themes": [
+        "design_controls"
+      ],
+      "mandatory_sections": [
+        "applicability_matrix",
+        "evidence_references",
+        "standards_used"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "classification_mdr",
+        "device_description"
+      ],
+      "human_required_fields": [
+        "evidence_references",
+        "standards_used"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "TMP-CE-01"
+      ],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-IU-02",
+      "name": "Stakeholders Requirements",
+      "file": "Design and Development/TMP-IU-02_Stakeholders_Requirements.docx",
+      "category": "Design and Development",
+      "doc_type": "TMP",
+      "description": "Requisitos de stakeholders/utilizadores que antecedem o SRS. Captura necessidades clínicas, do utilizador final, do operador, do paciente.",
+      "keywords": [
+        "stakeholder requirements",
+        "user needs",
+        "clinical needs"
+      ],
+      "regulations": [
+        "ISO_13485",
+        "IEC_62366"
+      ],
+      "themes": [
+        "design_controls",
+        "usability"
+      ],
+      "mandatory_sections": [
+        "user_needs",
+        "clinical_needs",
+        "operator_needs",
+        "patient_needs",
+        "regulatory_needs"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "user_profiles",
+        "target_population",
+        "use_environment"
+      ],
+      "human_required_fields": [
+        "user_needs",
+        "clinical_needs"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "TMP-SW-04",
+        "TMP-HF-02"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-HF-01",
+      "name": "Usability Engineering File",
+      "file": "Usability/TMP-HF-01_Usability_Engineering_File.docx",
+      "category": "Usability",
+      "doc_type": "TMP",
+      "description": "Ficheiro de engenharia de usabilidade conforme IEC 62366-1: consolidação de UE plan, análise de uso, hazard-related use scenarios, validação sumativa.",
+      "keywords": [
+        "usability engineering",
+        "human factors",
+        "use error",
+        "summative evaluation"
+      ],
+      "regulations": [
+        "IEC_62366",
+        "MDR"
+      ],
+      "themes": [
+        "usability"
+      ],
+      "mandatory_sections": [
+        "use_specification",
+        "user_interface_specification",
+        "use_related_hazards",
+        "summative_evaluation"
+      ],
+      "optional_sections": [
+        "formative_evaluation"
+      ],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "user_profiles",
+        "use_environment",
+        "indications"
+      ],
+      "human_required_fields": [
+        "use_related_hazards",
+        "summative_evaluation"
+      ],
+      "dependencies": [
+        "TMP-HF-02"
+      ],
+      "feeds_into": [
+        "TMP-RM-01"
+      ],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-HF-02",
+      "name": "Usability Engineering Plan",
+      "file": "Usability/TMP-HF-02_Usability_Engineering_Plan.docx",
+      "category": "Usability",
+      "doc_type": "TMP",
+      "description": "Plano de engenharia de usabilidade: âmbito, atividades, milestones, responsabilidades, métodos de avaliação.",
+      "keywords": [
+        "usability plan",
+        "human factors plan"
+      ],
+      "regulations": [
+        "IEC_62366"
+      ],
+      "themes": [
+        "usability"
+      ],
+      "mandatory_sections": [
+        "scope",
+        "activities",
+        "evaluation_methods",
+        "responsibilities"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "user_profiles"
+      ],
+      "human_required_fields": [
+        "evaluation_methods",
+        "responsibilities"
+      ],
+      "dependencies": [
+        "TMP-IU-02"
+      ],
+      "feeds_into": [
+        "TMP-HF-01",
+        "TMP-HF-03"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-HF-03",
+      "name": "Usability Test Protocol",
+      "file": "Usability/TMP-HF-03_Usability_Test_Protocol.docx",
+      "category": "Usability",
+      "doc_type": "TMP",
+      "description": "Protocolo de teste de usabilidade (formativo/sumativo): tarefas, participantes, cenários, critérios de sucesso.",
+      "keywords": [
+        "usability test",
+        "summative test",
+        "formative test",
+        "task analysis"
+      ],
+      "regulations": [
+        "IEC_62366"
+      ],
+      "themes": [
+        "usability"
+      ],
+      "mandatory_sections": [
+        "test_objectives",
+        "participant_profile",
+        "tasks",
+        "success_criteria",
+        "data_collection"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "user_profiles",
+        "intended_purpose"
+      ],
+      "human_required_fields": [
+        "tasks",
+        "success_criteria"
+      ],
+      "dependencies": [
+        "TMP-HF-02"
+      ],
+      "feeds_into": [
+        "TMP-HF-04"
+      ],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "TMP-HF-04",
+      "name": "Usability Test Report",
+      "file": "Usability/TMP-HF-04_Usability_Test_Report.docx",
+      "category": "Usability",
+      "doc_type": "TMP",
+      "description": "Relatório dos resultados de testes de usabilidade com use errors observados, análise e ações.",
+      "keywords": [
+        "usability report",
+        "use error analysis",
+        "summative results"
+      ],
+      "regulations": [
+        "IEC_62366"
+      ],
+      "themes": [
+        "usability"
+      ],
+      "mandatory_sections": [
+        "results",
+        "use_errors_observed",
+        "analysis",
+        "conclusions"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose"
+      ],
+      "human_required_fields": [
+        "use_errors_observed",
+        "analysis",
+        "conclusions"
+      ],
+      "dependencies": [
+        "TMP-HF-03"
+      ],
+      "feeds_into": [
+        "TMP-HF-01",
+        "TMP-RM-01"
+      ],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "FRM-SW-01",
+      "name": "Software Requirements Specification Checklist",
+      "file": "Design and Development/FRM-SW-01_Checklist_Software_Requirements_Specification.docx",
+      "category": "Design and Development",
+      "doc_type": "FRM",
+      "description": "Checklist de revisão do SRS para garantir completude conforme IEC 62304.",
+      "keywords": [
+        "SRS review",
+        "checklist",
+        "completeness"
+      ],
+      "regulations": [
+        "IEC_62304"
+      ],
+      "themes": [
+        "software",
+        "verification"
+      ],
+      "mandatory_sections": [
+        "checklist_items",
+        "reviewer_signoff"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "checklist_items",
+        "reviewer_signoff"
+      ],
+      "dependencies": [
+        "TMP-SW-04"
+      ],
+      "feeds_into": [],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "FRM-SW-05",
+      "name": "Software Release Checklist",
+      "file": "Design and Development/FRM-SW-05_Software_Release_Checklist.docx",
+      "category": "Design and Development",
+      "doc_type": "FRM",
+      "description": "Checklist de release de software conforme IEC 62304 §5.8: verificações finais antes de release.",
+      "keywords": [
+        "software release",
+        "release checklist",
+        "anomalies",
+        "known issues"
+      ],
+      "regulations": [
+        "IEC_62304"
+      ],
+      "themes": [
+        "software",
+        "verification"
+      ],
+      "mandatory_sections": [
+        "release_criteria",
+        "anomalies_list",
+        "approval"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "software_modules"
+      ],
+      "human_required_fields": [
+        "release_criteria",
+        "anomalies_list",
+        "approval"
+      ],
+      "dependencies": [
+        "TMP-SW-06"
+      ],
+      "feeds_into": [],
+      "workflow_priority": 5,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "FRM-SW-08",
+      "name": "Design Review Checklist",
+      "file": "Design and Development/FRM-SW-08_Design_Review_Checklist.docx",
+      "category": "Design and Development",
+      "doc_type": "FRM",
+      "description": "Checklist de design review formal conforme ISO 13485 §7.3.4.",
+      "keywords": [
+        "design review",
+        "ISO 13485",
+        "design controls"
+      ],
+      "regulations": [
+        "ISO_13485"
+      ],
+      "themes": [
+        "design_controls"
+      ],
+      "mandatory_sections": [
+        "review_items",
+        "attendees",
+        "actions"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "review_items",
+        "attendees",
+        "actions"
+      ],
+      "dependencies": [],
+      "feeds_into": [],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "FRM-SW-09",
+      "name": "Software Safety Classification",
+      "file": "Design and Development/FRM-SW-09_Software_Safety_Classification.docx",
+      "category": "Design and Development",
+      "doc_type": "FRM",
+      "description": "Justificação da classificação de segurança do software (A/B/C) conforme IEC 62304 §4.3.",
+      "keywords": [
+        "safety classification",
+        "Class A B C",
+        "IEC 62304"
+      ],
+      "regulations": [
+        "IEC_62304"
+      ],
+      "themes": [
+        "software",
+        "risk"
+      ],
+      "mandatory_sections": [
+        "classification_rationale",
+        "hazard_analysis_reference",
+        "approval"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "intended_purpose",
+        "software_modules"
+      ],
+      "human_required_fields": [
+        "classification_rationale",
+        "approval"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "TMP-SW-02"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "SOP-SW-01",
+      "name": "Procedure Software Development",
+      "file": "Design and Development/SOP-SW-01_Procedure_Software_Development.docx",
+      "category": "Design and Development",
+      "doc_type": "SOP",
+      "description": "Procedimento operacional para desenvolvimento de software conforme IEC 62304 e ISO 13485.",
+      "keywords": [
+        "software development procedure",
+        "SOP"
+      ],
+      "regulations": [
+        "IEC_62304",
+        "ISO_13485"
+      ],
+      "themes": [
+        "software",
+        "qms"
+      ],
+      "mandatory_sections": [
+        "purpose",
+        "scope",
+        "responsibilities",
+        "procedure_steps",
+        "records"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "procedure_steps",
+        "responsibilities"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "TMP-SW-02"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "SOP-SW-02",
+      "name": "Procedure Problem Resolution",
+      "file": "Corrective and Preventive Actions/SOP-SW-02_Procedure_Problem_Resolution.docx",
+      "category": "Corrective and Preventive Actions",
+      "doc_type": "SOP",
+      "description": "Procedimento de resolução de problemas de software conforme IEC 62304 §9.",
+      "keywords": [
+        "problem resolution",
+        "anomaly handling",
+        "software defects"
+      ],
+      "regulations": [
+        "IEC_62304"
+      ],
+      "themes": [
+        "software",
+        "capa"
+      ],
+      "mandatory_sections": [
+        "intake",
+        "analysis",
+        "resolution",
+        "verification",
+        "records"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "procedure_steps"
+      ],
+      "dependencies": [],
+      "feeds_into": [],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "SOP-CC-01",
+      "name": "Procedure Change Management",
+      "file": "Change Management/SOP-CC-01_Procedure_Change_Management.docx",
+      "category": "Change Management",
+      "doc_type": "SOP",
+      "description": "Procedimento de gestão de alterações conforme ISO 13485 §4.1.4 e IEC 62304 §6.",
+      "keywords": [
+        "change management",
+        "change control",
+        "impact assessment"
+      ],
+      "regulations": [
+        "ISO_13485",
+        "IEC_62304",
+        "MDR"
+      ],
+      "themes": [
+        "qms",
+        "change_control"
+      ],
+      "mandatory_sections": [
+        "request",
+        "impact_assessment",
+        "approval",
+        "implementation",
+        "verification"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "procedure_steps"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "FRM-CC-01",
+        "LST-CC-01"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "FRM-CC-01",
+      "name": "Change Request",
+      "file": "Change Management/FRM-CC-01_Change_Request.docx",
+      "category": "Change Management",
+      "doc_type": "FRM",
+      "description": "Formulário de pedido de alteração com impact assessment regulatório.",
+      "keywords": [
+        "change request",
+        "impact assessment"
+      ],
+      "regulations": [
+        "ISO_13485",
+        "MDR"
+      ],
+      "themes": [
+        "change_control"
+      ],
+      "mandatory_sections": [
+        "description",
+        "rationale",
+        "impact_assessment",
+        "approvals"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "description",
+        "rationale",
+        "impact_assessment",
+        "approvals"
+      ],
+      "dependencies": [
+        "SOP-CC-01"
+      ],
+      "feeds_into": [
+        "LST-CC-01"
+      ],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "LST-CC-01",
+      "name": "Change List",
+      "file": "Change Management/LST-CC-01_Change_List.xlsx",
+      "category": "Change Management",
+      "doc_type": "LST",
+      "description": "Lista de tracking de todas as alterações controladas.",
+      "keywords": [
+        "change log",
+        "tracking"
+      ],
+      "regulations": [
+        "ISO_13485"
+      ],
+      "themes": [
+        "change_control"
+      ],
+      "mandatory_sections": [
+        "change_log"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "change_log"
+      ],
+      "dependencies": [
+        "SOP-CC-01"
+      ],
+      "feeds_into": [],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "SOP-CP-01",
+      "name": "Procedure Corrective and Preventive Actions",
+      "file": "Corrective and Preventive Actions/SOP-CP-01_Procedure_Corrective_and_Preventive_Actions.docx",
+      "category": "Corrective and Preventive Actions",
+      "doc_type": "SOP",
+      "description": "Procedimento CAPA conforme ISO 13485 §8.5.2 e §8.5.3.",
+      "keywords": [
+        "CAPA",
+        "corrective action",
+        "preventive action",
+        "root cause"
+      ],
+      "regulations": [
+        "ISO_13485",
+        "MDR"
+      ],
+      "themes": [
+        "qms",
+        "capa"
+      ],
+      "mandatory_sections": [
+        "intake",
+        "investigation",
+        "root_cause",
+        "action_plan",
+        "verification",
+        "effectiveness_check"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "procedure_steps"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "LST-CP-01"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "LST-CP-01",
+      "name": "List of Corrective and Preventive Actions",
+      "file": "Corrective and Preventive Actions/LST-CP-01_List_Corrective_and_Preventive_Actions.xlsx",
+      "category": "Corrective and Preventive Actions",
+      "doc_type": "LST",
+      "description": "Registo de tracking de CAPAs.",
+      "keywords": [
+        "CAPA log",
+        "tracking"
+      ],
+      "regulations": [
+        "ISO_13485"
+      ],
+      "themes": [
+        "qms",
+        "capa"
+      ],
+      "mandatory_sections": [
+        "capa_log"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "capa_log"
+      ],
+      "dependencies": [
+        "SOP-CP-01"
+      ],
+      "feeds_into": [],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "SOP-CM-01",
+      "name": "Procedure Feedback and Complaints Management",
+      "file": "Complaint and Feedback Management/SOP-CM-01_Procedure_Feedback_and_Complaints_Management.docx",
+      "category": "Complaint and Feedback Management",
+      "doc_type": "SOP",
+      "description": "Procedimento de gestão de feedback e reclamações conforme ISO 13485 §8.2.1 e MDR Art. 87-92 (vigilance triggers).",
+      "keywords": [
+        "complaints",
+        "feedback",
+        "PMS input"
+      ],
+      "regulations": [
+        "ISO_13485",
+        "MDR"
+      ],
+      "themes": [
+        "qms",
+        "pms"
+      ],
+      "mandatory_sections": [
+        "intake_channels",
+        "evaluation",
+        "investigation",
+        "trending",
+        "vigilance_trigger_criteria"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "procedure_steps"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "SOP-VI-01",
+        "SOP-CP-01"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "SOP-VI-01",
+      "name": "Procedure Vigilance",
+      "file": "Vigilance/SOP-VI-01_Procedure_Vigilance.docx",
+      "category": "Vigilance",
+      "doc_type": "SOP",
+      "description": "Procedimento de vigilância e reporting de incidentes conforme MDR Art. 87-92 e MDCG 2023-3.",
+      "keywords": [
+        "vigilance",
+        "incident reporting",
+        "FSCA",
+        "MIR"
+      ],
+      "regulations": [
+        "MDR",
+        "MDCG"
+      ],
+      "themes": [
+        "pms",
+        "vigilance"
+      ],
+      "mandatory_sections": [
+        "intake",
+        "evaluation",
+        "reportability_assessment",
+        "reporting_timelines",
+        "FSCA_process"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "procedure_steps"
+      ],
+      "dependencies": [],
+      "feeds_into": [
+        "FRM-VI-01",
+        "FRM-VI-02"
+      ],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "FRM-VI-01",
+      "name": "Incident Evaluation",
+      "file": "Vigilance/FRM-VI-01_Incident_Evaluation.docx",
+      "category": "Vigilance",
+      "doc_type": "FRM",
+      "description": "Formulário de avaliação inicial de incidente para decisão de reportabilidade.",
+      "keywords": [
+        "incident evaluation",
+        "reportability",
+        "vigilance"
+      ],
+      "regulations": [
+        "MDR"
+      ],
+      "themes": [
+        "vigilance"
+      ],
+      "mandatory_sections": [
+        "incident_description",
+        "severity",
+        "device_involved",
+        "reportability_decision"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "device_description"
+      ],
+      "human_required_fields": [
+        "incident_description",
+        "reportability_decision"
+      ],
+      "dependencies": [
+        "SOP-VI-01"
+      ],
+      "feeds_into": [],
+      "workflow_priority": 2,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "FRM-VI-02",
+      "name": "Field Safety Notice",
+      "file": "Vigilance/FRM-VI-02_Field_Safety_Notice.docx",
+      "category": "Vigilance",
+      "doc_type": "FRM",
+      "description": "Modelo de Field Safety Notice (FSN) para FSCA conforme MDCG 2023-3.",
+      "keywords": [
+        "FSN",
+        "FSCA",
+        "field safety",
+        "recall"
+      ],
+      "regulations": [
+        "MDR",
+        "MDCG"
+      ],
+      "themes": [
+        "vigilance"
+      ],
+      "mandatory_sections": [
+        "device_identification",
+        "issue_description",
+        "actions_required",
+        "contact_info"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [
+        "device_description"
+      ],
+      "human_required_fields": [
+        "issue_description",
+        "actions_required"
+      ],
+      "dependencies": [
+        "SOP-VI-01"
+      ],
+      "feeds_into": [],
+      "workflow_priority": 3,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "LST-VI-01",
+      "name": "Regulatory Entities Contacts",
+      "file": "Vigilance/LST-VI-01_Regulatory_Entities_Contacts.docx",
+      "category": "Vigilance",
+      "doc_type": "LST",
+      "description": "Lista de contactos de autoridades competentes e organismos notificados por jurisdição.",
+      "keywords": [
+        "competent authorities",
+        "notified bodies",
+        "contacts"
+      ],
+      "regulations": [
+        "MDR"
+      ],
+      "themes": [
+        "vigilance",
+        "qms"
+      ],
+      "mandatory_sections": [
+        "contacts_list"
+      ],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [
+        "contacts_list"
+      ],
+      "dependencies": [],
+      "feeds_into": [],
+      "workflow_priority": 1,
+      "metadata_status": "seed"
+    },
+    {
+      "id": "PMCF-LEGACY-01",
+      "name": "PMCF Template (legacy)",
+      "file": "pmcf_template.docx",
+      "category": "Clinical Evaluation",
+      "doc_type": "TMP",
+      "description": "Template PMCF legacy do BridgeMedAI já existente antes da fusão dos chats. Mantido para compatibilidade com o workflow PMCF atual.",
+      "keywords": [
+        "PMCF",
+        "legacy"
+      ],
+      "regulations": [
+        "MDR"
+      ],
+      "themes": [
+        "clinical",
+        "pmcf",
+        "pms"
+      ],
+      "mandatory_sections": [],
+      "optional_sections": [],
+      "auto_fillable_fields": [],
+      "human_required_fields": [],
+      "dependencies": [],
+      "feeds_into": [],
+      "workflow_priority": 99,
+      "metadata_status": "legacy",
+      "metadata_notes": "Template pre-existente. Decidir mais tarde se substituir por TMP-CE-05/06 ou manter ambos."
+    }
+  ]
+}
