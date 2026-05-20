@@ -551,25 +551,37 @@ def _is_pmcf_generation_command(text: Optional[str]) -> bool:
         return False
 
     t = text.strip().lower()
-    commands = [
-        "faz agora o documento pmcf",
-        "faz o documento pmcf",
-        "gera o documento pmcf",
-        "gera o pmcf",
-        "cria o documento pmcf",
-        "preenche o pmcf",
-        "faz agora o pmcf",
-        "faz o documento pcmf",
-        "gera o documento pcmf",
-        "gera o pcmf",
-        "cria o documento pcmf",
-        "preenche o pcmf",
+
+    informational = [
+        "o que ",
+        "que deve conter",
+        "deve conter",
+        "conteúdo",
+        "conteudo",
+        "estrutura",
+        "esqueleto",
+        "exemplo de plano",
+    ]
+
+    if any(expr in t for expr in informational):
+        return False
+
+    has_pmcf = "pmcf" in t or "pcmf" in t
+
+    has_strong_generation_intent = any(expr in t for expr in [
+        "preenche",
+        "preencher",
+        "gera o documento",
+        "gerar o documento",
+        "cria o documento",
+        "criar o documento",
+        "faz o documento",
+        "fazer o documento",
         "documento pmcf",
         "documento pcmf",
-        "plano pmcf",
-        "plano pcmf",
-    ]
-    return any(cmd in t for cmd in commands)
+    ])
+
+    return has_pmcf and has_strong_generation_intent
 
 
 def _looks_like_device_description(text: str) -> bool:

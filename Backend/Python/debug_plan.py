@@ -1,11 +1,10 @@
 from rag_router_utils import analyze_question
 
 questions = [
-    "Quais são as obrigações gerais de um fabricante segundo o MDR?",
-    "Em relação à primeira pergunta indica então 10 obrigações que um fabricante tem segundo o MDR",
-    "Que documentação técnica tenho de preparar para um dispositivo médico segundo o MDR?",
-    "Quais são os passos do procedimento de avaliação da conformidade?",
-    "Que obrigações tem um organismo notificado segundo o MDR?",
+    "Que obrigações tem o prestador de um sistema de IA de risco elevado segundo o AI Act?",
+    "Esse software com IA para interpretar ECG é considerado de alto risco no AI Act?",
+    "Preciso de organismo notificado para um dispositivo Classe I?",
+    "Que requisitos gerais de segurança e desempenho tenho de cumprir segundo o MDR?",
 ]
 
 for q in questions:

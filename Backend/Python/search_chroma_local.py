@@ -25,8 +25,15 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-import chromadb
 import ollama
+
+from rag_chromadb_service import (
+    get_chroma_collection,
+    CHROMA_COLLECTION_NAME,
+    CHROMA_MODE,
+    CHROMA_HOST,
+    CHROMA_PORT,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -39,16 +46,12 @@ ENV_PATH = PROJECT_ROOT / "Backend" / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL")
-CHROMA_PERSIST_DIR = (
-    PROJECT_ROOT / os.getenv("CHROMA_PERSIST_DIR", "Backend/chroma_data")
-).resolve()
 
 
 # ---------------------------------------------------------------------------
 # Nome da collection vetorial
 # ---------------------------------------------------------------------------
 # Esta collection contém os chunks normativos previamente indexados.
-COLLECTION_NAME = "regulations_chunks"
 
 
 def main():
@@ -78,8 +81,12 @@ def main():
     # -----------------------------------------------------------------------
     # Ligação ao cliente ChromaDB persistente
     # -----------------------------------------------------------------------
-    chroma_client = chromadb.PersistentClient(path=str(CHROMA_PERSIST_DIR))
-    collection = chroma_client.get_collection(name=COLLECTION_NAME)
+    collection = get_chroma_collection()
+
+    print(f"[INFO] Chroma mode: {CHROMA_MODE}")
+    print(f"[INFO] Chroma host: {CHROMA_HOST}:{CHROMA_PORT}")
+    print(f"[INFO] Collection: {CHROMA_COLLECTION_NAME}")
+    print(f"[INFO] Count: {collection.count()}")
 
     # -----------------------------------------------------------------------
     # Geração do embedding da query

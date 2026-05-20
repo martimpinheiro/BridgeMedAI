@@ -234,6 +234,25 @@ REGRAS OBRIGATÓRIAS:
 - Quando não tiveres informação suficiente, indica-o explicitamente em vez de inventar.
 - Termina sempre a resposta perguntando ao utilizador se pretende que preenchas o Plano de Follow-Up Clínico Pós-Mercado (PMCF).
 
+
+REGRAS DE CONTEÚDO REGULATÓRIO:
+- Nunca digas que a vigilância pós-comercialização/PMS não é obrigatória para um dispositivo médico MDR. Deve ser apresentada como obrigação pós-mercado proporcional ao tipo, classe e risco do dispositivo.
+- Nunca digas que o PMCF é “não aplicável” apenas por causa da classe do dispositivo. O PMCF faz parte da avaliação clínica e do sistema PMS; pode ser justificado que não sejam necessárias atividades PMCF específicas, mas essa justificação depende da avaliação clínica, risco, novidade, dados clínicos existentes e desempenho pós-mercado.
+- Para PMCF, usa formulações como: “PMCF/ACPC deve ser planeado ou justificado no âmbito da avaliação clínica e PMS; a extensão das atividades depende do risco, novidade e evidência clínica disponível.”
+- Para QMS, não digas simplesmente “ISO 13485 não é obrigatório”. Diz: “o fabricante deve ter um sistema de gestão da qualidade conforme o MDR; ISO 13485 pode ser usada como referência reconhecida para estruturar esse sistema.”
+- Para gestão de risco, apresenta ISO 14971 como norma prática/referência técnica, sem inventar obrigatoriedade legal direta se o contexto não a sustentar.
+- Para AI Act, se o dispositivo descrito não tiver IA, diz: “não foi descrito um sistema de IA; por isso, não há enquadramento AI Act suficiente nesta descrição.”
+- Para AI Act, se houver IA integrada num dispositivo médico, separa sempre: classe MDR ≠ categoria de risco AI Act.
+- Não cites artigos do AI Act se não estiveres seguro do artigo aplicável.
+- Não uses expressões absolutas como “não abrangido pelo AI Act” quando apenas falta descrição de IA. Prefere: “não há indícios suficientes de sistema de IA na descrição fornecida.”
+
+
+REGRAS CANÓNICAS DE CLASSIFICAÇÃO MDR:
+- Um termómetro digital com finalidade médica de medição da temperatura corporal deve ser tratado como dispositivo ativo de diagnóstico/monitorização; classe provável: Classe IIa pela Regra 10 do Anexo VIII, salvo se a descrição indicar apenas uso não médico/bem-estar.
+- Não classifiques um termómetro digital médico como Classe I apenas por ser não invasivo. Sendo ativo e usado para diagnóstico/monitorização, considera primeiro a Regra 10.
+- Um termómetro sem finalidade médica prevista pode ficar fora do MDR, mas isso depende dos claims/finalidade prevista do fabricante.
+- Se houver algoritmo de IA que estima temperatura central, explica separadamente: classe MDR provável pela Regra 10 e eventual análise AI Act apenas se a funcionalidade for realmente um sistema de IA.
+
 FORMATO DE RESPOSTA:
 Devolves SEMPRE duas secções separadas pela linha exata ---JSON---
 
@@ -643,6 +662,132 @@ def skip_remaining_and_generate(session_id: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Step 3 — geração do documento
 # ---------------------------------------------------------------------------
+
+def _delete_paragraph(paragraph) -> None:
+    element = paragraph._element
+    parent = element.getparent()
+    if parent is not None:
+        parent.remove(element)
+
+
+def _delete_table(table) -> None:
+    element = table._element
+    parent = element.getparent()
+    if parent is not None:
+        parent.remove(element)
+
+
+def _table_text(table) -> str:
+    parts = []
+    for row in table.rows:
+        for cell in row.cells:
+            parts.append(cell.text or "")
+    return "\n".join(parts)
+
+
+def _clear_cell_and_write(cell, text: str, flag: bool = True) -> None:
+    cell.text = ""
+    paragraph = cell.paragraphs[0]
+    run = paragraph.add_run(text)
+    run.font.size = Pt(10)
+    if flag:
+        run.font.color.rgb = RGBColor(0xA2, 0x2D, 0x2D)
+        run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+
+
+def _cleanup_generated_pmcf_doc(doc: Document) -> None:
+    """
+    Remove instruções, exemplos e placeholders do template antes de guardar
+    o documento final.
+    """
+
+    # 1) Remover parágrafos de instrução do template
+    delete_until_pmcf_identification = False
+
+    for paragraph in list(doc.paragraphs):
+        text = (paragraph.text or "").strip()
+        text_lower = text.lower()
+
+        if text == "TEMPLATE INSTRUCTIONS":
+            delete_until_pmcf_identification = True
+            _delete_paragraph(paragraph)
+            continue
+
+        if delete_until_pmcf_identification:
+            if re.match(r"^1\.\s*PMCF Identification", text, flags=re.IGNORECASE):
+                delete_until_pmcf_identification = False
+            else:
+                _delete_paragraph(paragraph)
+            continue
+
+        instruction_patterns = [
+            "important:",
+            "examples:",
+            "for example:",
+            "please note",
+            "this template document contains guidance notes",
+            "sections that are indicated as optional",
+            "clean up the table as needed",
+            "guidance documents that may further help",
+            "see section",
+            "see user profile",
+            "see tmp-",
+            "as per mdcg",
+        ]
+
+        if any(p in text_lower for p in instruction_patterns):
+            _delete_paragraph(paragraph)
+            continue
+
+        # remover linhas só com placeholders/exemplos
+        if re.fullmatch(r"(?i)\s*(xx|xxx|yyy|\[.*?\]|e\.g\..*)\s*", text):
+            _delete_paragraph(paragraph)
+            continue
+
+    # 2) Remover tabelas de histórico do template e tabelas claramente exemplificativas
+    for table in list(doc.tables):
+        t = _table_text(table).lower()
+
+        if (
+            "template version history" in t
+            or "first version" in t
+            or "célia cruz" in t
+            or "celia cruz" in t
+        ):
+            _delete_table(table)
+            continue
+
+    # 3) Substituir células ainda exemplificativas por aviso manual
+    placeholder_patterns = [
+        r"\bXX\b",
+        r"\bXXX\b",
+        r"\bYYY\b",
+        r"\be\.g\.",
+        r"\[Title of the test report\]",
+        r"Statistical sample size estimation",
+        r"Start of the survey:",
+        r"End of the survey:",
+        r"Data analysis:",
+    ]
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text = cell.text or ""
+                if not text.strip():
+                    continue
+
+                if MANUAL_FLAG_PREFIX in text or "Conteúdo preenchido:" in text:
+                    continue
+
+                if any(re.search(p, text, flags=re.IGNORECASE) for p in placeholder_patterns):
+                    _clear_cell_and_write(
+                        cell,
+                        f"{MANUAL_FLAG_PREFIX} — rever e adaptar ao dispositivo",
+                        flag=True,
+                    )
+
+
 def generate_document(session_id: str) -> Dict[str, Any]:
     """Preenche o template e devolve o caminho do ficheiro final."""
     session = get_session(session_id)
@@ -692,6 +837,9 @@ def generate_document(session_id: str) -> Dict[str, Any]:
                 "label": s["label"],
                 "reason": "informação não fornecida pelo utilizador",
             })
+
+    # --- Limpar instruções e exemplos do template ---
+    _cleanup_generated_pmcf_doc(doc)
 
     # --- Guardar ficheiro ---
     out_name = f"PMCF_{session.session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"

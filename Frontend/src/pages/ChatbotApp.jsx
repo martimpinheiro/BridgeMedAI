@@ -133,9 +133,18 @@ const STORAGE_KEY = "bridgemedai_chat_state_v1";
 const INTENT_LABELS = {
   regulatory_scope: "Enquadramento regulatório",
   classification_risk: "Classificação e risco",
+  classification_and_scope: "Classificação + enquadramento",
   documentation: "Documentação técnica",
+  pms_plan: "Plano PMS",
+  pmcf: "PMCF",
   conformity_procedure: "Procedimento de conformidade",
   requirement_lookup: "Consulta de requisitos",
+  manufacturer_obligations: "Obrigações do fabricante",
+  ai_provider_obligations: "Obrigações AI Act",
+  ai_high_risk: "Risco elevado AI Act",
+  gspr_requirements: "Requisitos gerais de segurança e desempenho",
+  device_qualification: "Qualificação como dispositivo médico",
+  clinical_evaluation_terms: "Avaliação clínica / investigação clínica / PMCF",
 };
 
 const DOC_LABELS = {
@@ -189,11 +198,11 @@ function createConversation(title = "Nova conversa") {
 function hasActiveRegulatoryFlow(conversation) {
   if (!conversation?.regulatory) return false;
   const step = conversation.regulatory.step;
+
   return (
     step === "awaiting_description" ||
     step === "awaiting_fill_confirmation" ||
-    step === "collecting_info" ||
-    step === "document_ready"
+    step === "collecting_info"
   );
 }
 
@@ -261,25 +270,37 @@ function isPmcfGenerationCommand(text) {
   const t = (text || "").trim().toLowerCase();
   if (!t) return false;
 
-  const hasPmcf =
-    t.includes("pmcf") ||
-    t.includes("pcmf") ||
-    t.includes("plano de follow-up clínico pós-mercado") ||
-    t.includes("plano de follow up clinico pos mercado");
+  // Estas são perguntas/conteúdo educativo, não geração de documento
+  const informational = [
+    "o que ",
+    "que deve conter",
+    "deve conter",
+    "conteúdo",
+    "conteudo",
+    "estrutura",
+    "esqueleto",
+    "exemplo de plano",
+  ];
 
-  const hasGenerationVerb =
-    t.includes("gera") ||
-    t.includes("gerar") ||
-    t.includes("cria") ||
-    t.includes("criar") ||
-    t.includes("faz") ||
-    t.includes("fazer") ||
+  if (informational.some((expr) => t.includes(expr))) {
+    return false;
+  }
+
+  const hasPmcf = t.includes("pmcf") || t.includes("pcmf");
+
+  const hasStrongGenerationIntent =
     t.includes("preenche") ||
     t.includes("preencher") ||
-    t.includes("documento") ||
-    t.includes("plano");
+    t.includes("gera o documento") ||
+    t.includes("gerar o documento") ||
+    t.includes("cria o documento") ||
+    t.includes("criar o documento") ||
+    t.includes("faz o documento") ||
+    t.includes("fazer o documento") ||
+    t.includes("documento pmcf") ||
+    t.includes("documento pcmf");
 
-  return hasPmcf && hasGenerationVerb;
+  return hasPmcf && hasStrongGenerationIntent;
 }
 
   function buildConversationHistory(messages, limit = 8) {
@@ -2446,6 +2467,13 @@ export default function ChatbotApp() {
   const regulatoryActive = hasActiveRegulatoryFlow(activeConversation);
   const currentRegulatoryStep = activeConversation?.regulatory?.step || null;
 
+  const pmcfDocumentReady =
+    activeConversation?.regulatory?.step === "document_ready" &&
+    activeConversation?.regulatory?.pendingAction === "download_document";
+
+  const showRegulatoryActionBar =
+    regulatoryActive || pmcfDocumentReady;
+
   useEffect(() => {
     if (!activeConversationId && conversations.length > 0) {
       setActiveConversationId(conversations[0].id);
@@ -2777,13 +2805,12 @@ export default function ChatbotApp() {
     const regulatoryStep = regulatory?.step;
 
     const regulatoryInProgress =
-      regulatory &&
-      (
-        regulatoryStep === "awaiting_description" ||
-        regulatoryStep === "awaiting_fill_confirmation" ||
-        regulatoryStep === "collecting_info" ||
-        regulatoryStep === "document_ready"
-      );
+  regulatory &&
+  (
+    regulatoryStep === "awaiting_description" ||
+    regulatoryStep === "awaiting_fill_confirmation" ||
+    regulatoryStep === "collecting_info"
+  );
 
     if (regulatoryInProgress) {
       if (
@@ -2883,6 +2910,12 @@ if (shouldStartRegulatoryFlow(question)) {
     const regulatory = activeConversation.regulatory || {};
     const step = regulatory.step || "awaiting_description";
     const shouldStart = options.startIfNeeded || !regulatory?.sessionId;
+
+    const sessionIdToSend =
+      options.startIfNeeded && step === "document_ready"
+        ? null
+        : regulatory.sessionId || null;
+
     const history = buildConversationHistory(activeConversation?.messages || []);
 
     const visibleUserText = options.triggerText || text;
@@ -2915,7 +2948,7 @@ if (shouldStartRegulatoryFlow(question)) {
           method: "POST",
           body: JSON.stringify({
             description: text,
-            session_id: regulatory.sessionId || null,
+            session_id: sessionIdToSend,
             conversation_id: activeConversation.id,
             history,
           }),
@@ -3552,7 +3585,7 @@ if (shouldStartRegulatoryFlow(question)) {
           )}
         </div>
 
-        {regulatoryActive && activeConversation.regulatory?.pendingAction && (
+        {showRegulatoryActionBar && activeConversation.regulatory?.pendingAction && (
           <RegulatoryActionBar
             pendingAction={activeConversation.regulatory.pendingAction}
             loading={chatState.loading}
@@ -3607,10 +3640,7 @@ if (shouldStartRegulatoryFlow(question)) {
             width: "100%",
             alignSelf: "center",
             boxSizing: "border-box",
-            opacity:
-              regulatoryActive && currentRegulatoryStep === "document_ready"
-                ? 0.5
-                : 1,
+            opacity: 1,
           }}
         >
           <textarea
@@ -3621,10 +3651,7 @@ if (shouldStartRegulatoryFlow(question)) {
             rows={1}
             disabled={
               regulatoryActive &&
-              (
-                currentRegulatoryStep === "awaiting_fill_confirmation" ||
-                currentRegulatoryStep === "document_ready"
-              )
+              currentRegulatoryStep === "awaiting_fill_confirmation"
             }
             placeholder={
               regulatoryActive

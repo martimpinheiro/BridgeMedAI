@@ -82,6 +82,75 @@ def get_connection():
     return pyodbc.connect(conn_str)
 
 
+def reset_regulatory_tables(short_names=("MDR", "AI_ACT")):
+    """
+    Remove da base de dados os documentos regulatórios indicados e todos os
+    respetivos chunks, secções e jobs de ingestão.
+
+    Isto evita duplicação quando se corre novamente o pipeline de ingestão.
+    """
+    if not short_names:
+        return
+
+    placeholders = ",".join(["?"] * len(short_names))
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            f"""
+            DELETE c
+            FROM dbo.document_chunks c
+            INNER JOIN dbo.documents d
+                ON c.document_id = d.id
+            WHERE d.short_name IN ({placeholders})
+            """,
+            *short_names,
+        )
+
+        cursor.execute(
+            f"""
+            DELETE s
+            FROM dbo.document_sections s
+            INNER JOIN dbo.documents d
+                ON s.document_id = d.id
+            WHERE d.short_name IN ({placeholders})
+            """,
+            *short_names,
+        )
+
+        cursor.execute(
+            f"""
+            DELETE j
+            FROM dbo.ingestion_jobs j
+            INNER JOIN dbo.documents d
+                ON j.document_id = d.id
+            WHERE d.short_name IN ({placeholders})
+            """,
+            *short_names,
+        )
+
+        cursor.execute(
+            f"""
+            DELETE FROM dbo.documents
+            WHERE short_name IN ({placeholders})
+            """,
+            *short_names,
+        )
+
+        conn.commit()
+        print(f"[OK] Dados antigos removidos para: {', '.join(short_names)}")
+
+    except Exception:
+        conn.rollback()
+        raise
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # =========================================================
 # 3. HASH DO FICHEIRO
 # =========================================================
@@ -230,7 +299,10 @@ def combine_broken_lines(lines: List[str]) -> List[str]:
             combined.append(buffer.strip())
         buffer = ""
 
-    list_like_pattern = re.compile(r"^(\(?[a-zA-Z0-9ivxIVX]+\)|\d+\)|\d+\.|-|•)\s+")
+    list_like_pattern = re.compile(
+    r"^(\(?[a-zA-Z0-9ivxIVX]+\)|\d+\)|\d+(?:\.\d+)*\.|-|•)\s+"
+    )
+    
     header_like_pattern = re.compile(
         r"^(CAP[IÍ]TULO|CHAPTER|ANEXO|ANNEX|ARTIGO|ARTICLE|Article|Regra|RULE)\b",
         re.IGNORECASE
@@ -453,6 +525,7 @@ def split_into_sections_from_pages(pages, short_name: str):
     preamble_lines = []
     section_order = 0
     allow_recitals = False
+    current_annex = None
 
     def flush_current():
         """
@@ -474,7 +547,8 @@ def split_into_sections_from_pages(pages, short_name: str):
                 "raw_text": raw_text,
                 "section_order": current["section_order"],
                 "page_start": current["page_start"],
-                "page_end": current["page_end"]
+                "page_end": current["page_end"],
+                "parent_annex": current.get("parent_annex"),
             })
 
         current = None
@@ -518,7 +592,10 @@ def split_into_sections_from_pages(pages, short_name: str):
                         section_order += 1
 
                     preamble_lines = []
-
+                
+                if header["section_type"] == "annex":
+                    current_annex = header["section_number"]
+                
                 current = {
                     "section_type": header["section_type"],
                     "section_number": header["section_number"],
@@ -526,7 +603,8 @@ def split_into_sections_from_pages(pages, short_name: str):
                     "lines": [header["header"]],
                     "section_order": section_order,
                     "page_start": page_number,
-                    "page_end": page_number
+                    "page_end": page_number,
+                    "parent_annex": current_annex,
                 }
                 section_order += 1
 
@@ -610,7 +688,11 @@ def split_section_into_subunits(section: Dict[str, str]) -> List[Dict[str, str]]
     lines = [normalize_line(line) for line in raw_text.split("\n") if normalize_line(line)]
     lines = combine_broken_lines(lines)
 
-    rule_pattern = re.compile(r"^(Regra|RULE)\s+(\d+)(?:\s*[—\-–]\s*(.*))?$", re.IGNORECASE)
+    rule_pattern = re.compile(
+    r"^(?:\d+(?:\.\d+)*\.\s*)?(Regra|RULE)\s+(?:n\.?\s*[ºo°]?\s*)?(\d+)(?:\s*[—\-–:]?\s*(.*))?$",
+    re.IGNORECASE,
+    )
+    
     numbered_pattern = re.compile(r"^(\d+)\.\s+(.*)$")
     alpha_pattern = re.compile(r"^\(([a-z])\)\s+(.*)$", re.IGNORECASE)
 
@@ -1051,31 +1133,28 @@ def insert_chunk(cursor, document_id, section_id, chunk_index, chunk_text_value,
 # 11. PIPELINE PRINCIPAL
 # =========================================================
 def build_citation_label(short_name: str, section: Dict[str, str], unit: Dict[str, str]) -> str:
-    """
-    Constrói a citação curta usada para rastreabilidade e retrieval.
-
-    Regras:
-    - se a unidade for mais específica que a secção (ex.: regra/ponto), inclui ambos;
-    - caso contrário, usa apenas documento + secção;
-    - se não houver secção, usa um fallback.
-
-    Args:
-        short_name:
-            Nome curto do documento.
-        section:
-            Secção principal.
-        unit:
-            Subunidade atual.
-
-    Returns:
-        str:
-            Etiqueta de citação.
-    """
     section_number = (section.get("section_number") or "").strip()
+    section_title = (section.get("section_title") or "").strip()
+    parent_annex = (section.get("parent_annex") or "").strip()
+    unit_type = (unit.get("unit_type") or "").strip()
     unit_number = (unit.get("unit_number") or "").strip()
 
-    if unit["unit_type"] in {"rule", "point"} and unit_number and unit_number != section_number:
-        return f"{short_name} {section_number} {unit_number}"
+    if unit_type == "rule" and unit_number:
+        parent = parent_annex
+
+        # Fallback específico para regras de classificação MDR.
+        if not parent and short_name == "MDR":
+            text = f"{section_number} {section_title}".lower()
+            if "regras de classificação" in text or "regras de classificacao" in text:
+                parent = "ANEXO VIII"
+
+        if parent:
+            return f"{short_name} {parent} {unit_number}"
+
+        return f"{short_name} {section_number} {unit_number}".strip()
+
+    if unit_type == "point" and unit_number and unit_number != section_number:
+        return f"{short_name} {section_number} {unit_number}".strip()
 
     if section_number:
         return f"{short_name} {section_number}"
@@ -1166,27 +1245,46 @@ def ingest_regulation(
         print(f"[INFO] {short_name}: {len(sections)} secções encontradas")
 
         total_chunks = 0
+        db_section_order = 0
 
         for section in sections:
-            section_id = insert_section(
-                cursor=cursor,
-                document_id=document_id,
-                section_type=section["section_type"],
-                section_number=section["section_number"],
-                section_title=section["section_title"],
-                raw_text=section["raw_text"],
-                section_order=section["section_order"],
-                page_start=section["page_start"],
-                page_end=section["page_end"]
-            )
-
             subunits = split_section_into_subunits(section)
-            chunk_counter = 0
+
+            if not subunits:
+                continue
 
             for unit in subunits:
-                chunks = chunk_text(unit["raw_text"], max_chars=1200, overlap=150)
+                unit_type = unit.get("unit_type") or section["section_type"]
+                unit_number = unit.get("unit_number") or section["section_number"]
+                unit_title = unit.get("unit_title") or section["section_title"]
+                unit_raw_text = unit.get("raw_text") or section["raw_text"]
 
-                for ch in chunks:
+                # Se for uma subunidade real, gravamos a subunidade como secção própria.
+                # Assim a SQL/Chroma passa a ter:
+                # section_type = rule
+                # section_number = Regra 10
+                # citation_label = MDR ANEXO VIII Regra 10
+                is_subunit = (
+                    unit_type != section["section_type"]
+                    or unit_number != section["section_number"]
+                )
+
+                section_id = insert_section(
+                    cursor=cursor,
+                    document_id=document_id,
+                    section_type=unit_type if is_subunit else section["section_type"],
+                    section_number=unit_number if is_subunit else section["section_number"],
+                    section_title=unit_title if is_subunit else section["section_title"],
+                    raw_text=unit_raw_text,
+                    section_order=db_section_order,
+                    page_start=section["page_start"],
+                    page_end=section["page_end"],
+                )
+                db_section_order += 1
+
+                chunks = chunk_text(unit_raw_text, max_chars=1200, overlap=150)
+
+                for chunk_counter, ch in enumerate(chunks):
                     citation_label = build_citation_label(short_name, section, unit)
 
                     insert_chunk(
@@ -1197,9 +1295,9 @@ def ingest_regulation(
                         chunk_text_value=ch,
                         citation_label=citation_label,
                         page_start=section["page_start"],
-                        page_end=section["page_end"]
+                        page_end=section["page_end"],
                     )
-                    chunk_counter += 1
+
                     total_chunks += 1
 
         update_ingestion_job(cursor, job_id=job_id, status="completed", error_message=None)
@@ -1230,16 +1328,8 @@ def ingest_regulation(
 # 12. EXECUÇÃO MANUAL
 # =========================================================
 if __name__ == "__main__":
-    """
-    Ponto de entrada para ingestão manual dos regulamentos principais do projeto.
+    reset_regulatory_tables(short_names=("MDR", "AI_ACT"))
 
-    Documentos atualmente previstos:
-    - MDR
-    - AI Act
-
-    Este bloco permite correr o pipeline diretamente pela linha de comandos,
-    sem depender de outros módulos.
-    """
     ingest_regulation(
         pdf_path=str(DOCS_ROOT / "MDR.pdf"),
         title="Medical Device Regulation",

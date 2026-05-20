@@ -26,7 +26,7 @@ CHROMA_PERSIST_DIR = (
 
 CHROMA_COLLECTION_NAME = os.getenv(
     "CHROMA_COLLECTION_NAME",
-    "bridgemedai_regulatory",
+    "regulations_chunks",
 )
 
 

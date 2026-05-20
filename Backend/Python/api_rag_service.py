@@ -100,6 +100,10 @@ Regras obrigatórias:
 - Nunca cites como "FONTE 1", "FONTE 2" ou semelhante.
 - Usa sempre o valor do campo "Citação:" da fonte, por exemplo "MDR Artigo 10" ou "AI_ACT Artigo 6".
 - Se não souberes a citação exata, não cites essa fonte.
+- Nunca reproduzas os metadados completos das fontes, como "Documento:", "Tipo:", "Secção:", "Título:" ou "Páginas:".
+- Não copies o bloco de contexto recuperado para a resposta final.
+- Usa as fontes apenas para fundamentar a resposta, citando só a etiqueta do campo "Citação:".
+- Não respondas escrevendo "Citação: ... Documento: ... Tipo: ...".
 """
 
 
@@ -139,13 +143,23 @@ Objetivo da resposta:
 - Cada obrigação listada tem de estar sustentada pela própria fonte citada nessa linha.
 - Não uses uma citação global única no fim para sustentar uma lista inteira.
 - Se listares obrigações, cita cada obrigação individualmente.
+- Sistema de vigilância/monitorização pós-comercialização deve ser citado com MDR Artigo 83, não MDR Artigo 61.
+- Avaliação clínica deve ser citada com MDR Artigo 61.
+- UDI / identificação única do dispositivo deve ser citado com MDR Artigo 27 quando essa fonte estiver no contexto.
+- Registo dos dispositivos deve ser citado com MDR Artigo 29.
+- Declaração UE de conformidade deve ser citada com MDR Artigo 19; usa MDR ANEXO IV apenas para o conteúdo da declaração.
+- Não repitas a mesma obrigação com palavras diferentes.
 """,
 
     "conformity_procedure": """
 Objetivo da resposta:
 - Explicar o procedimento de forma estruturada por passos.
-- Priorizar Artigo 52 e Anexos IX, X e XI do MDR quando disponíveis.
-- Não transformar perguntas de documentação em classificação de risco.
+- Priorizar MDR Artigo 52 e Anexos IX, X e XI do MDR quando disponíveis.
+- Para Classe IIa, IIb e III, explicar que há envolvimento de organismo notificado quando o contexto o sustentar.
+- Para Classe IIb, explicar que o fabricante deve seguir um procedimento de avaliação da conformidade aplicável, como Anexo IX ou combinação Anexo X + Anexo XI, se essas fontes estiverem no contexto.
+- Incluir documentação técnica, avaliação clínica, sistema de gestão da qualidade, declaração UE de conformidade e marcação CE apenas se houver fonte no contexto.
+- Não transformar perguntas de marcação CE em classificação de risco.
+- Não usar capítulos genéricos como fonte principal se houver artigos/anexos específicos disponíveis.
 """,
 
     "documentation": """
@@ -169,11 +183,139 @@ Objetivo da resposta:
     "classification_risk": """
 Objetivo da resposta:
 - Identificar primeiro a base normativa concreta: MDR Artigo 51, MDR Anexo VIII e a Regra/Ponto aplicável.
-- Se uma regra concreta do Anexo VIII estiver no contexto, aplica essa regra ao caso descrito.
-- Se houver base suficiente, indica a classe provável.
-- Se a classificação depender de características ainda não confirmadas, indica a classe provável e lista as condições que têm de ser confirmadas.
-- Não digas apenas que falta informação se o contexto contiver uma regra aplicável clara.
-- Não uses fontes sobre declaração UE de conformidade, avaliação da conformidade ou anexos que não sejam o Anexo VIII para decidir a classe.
+- Se a pergunta também perguntar se o produto é dispositivo médico, começa com uma nota curta de qualificação com base no MDR Artigo 2, se estiver no contexto.
+- Depois responde à classe MDR com base no MDR Artigo 51 e no MDR Anexo VIII.
+- Não assumas automaticamente Classe I só porque o dispositivo é não invasivo.
+- Se o dispositivo for ativo, digital, mede/estima parâmetros fisiológicos, apoia diagnóstico ou monitorização clínica, considera primeiro as regras de dispositivos ativos e/ou software antes da Regra 1.
+- Para dispositivos ativos destinados a diagnóstico ou monitorização, considera a Regra 10 quando estiver no contexto.
+- Para software que presta informações usadas em decisões com fins terapêuticos ou de diagnóstico, considera a Regra 11 quando estiver no contexto.
+- Se houver IA, separa sempre a classe MDR da categoria de risco do AI Act.
+- Se a classificação depender de finalidade prevista, criticidade da decisão, utilizadores ou impacto clínico, responde com “Classe provável” e lista as condições a confirmar.
+- Não uses fontes sobre declaração UE de conformidade, registo, PMS, avaliação da conformidade ou organismos notificados para decidir a classe.
+- Se o contexto contiver Regra 10 e o dispositivo for um termómetro digital/ativo destinado a diagnóstico ou monitorização, não respondas apenas "não está claro"; indica "Classe provável: Classe IIa", com condições a confirmar.
+- Se o contexto contiver Regra 11 e o software prestar informações usadas para decisões com fins terapêuticos ou de diagnóstico, começa por "Classe provável: Classe IIa".
+- Só indiques Classe IIb ou Classe III quando o contexto ou a pergunta indicar impacto clínico grave, intervenção cirúrgica, morte ou deterioração irreversível.
+- Nunca apresentes Classe IIb como conclusão direta para software de apoio ao diagnóstico se ainda não estiver confirmada a gravidade da decisão clínica.
+- Se a pergunta disser apenas termómetro simples/não invasivo, sem indicar que é digital, ativo, software, IA, infravermelhos ou algoritmo, considera primeiro a Regra 1.
+- Para termómetro simples não invasivo, a conclusão esperada é "Classe provável: Classe I", salvo se outra regra do Anexo VIII se aplicar.
+- Só aplica Regra 10 ao termómetro quando a pergunta indicar que é ativo, digital, eletrónico, por infravermelhos, software, IA, algoritmo, ou destinado a diagnóstico/monitorização clínica ativa.
+""",
+
+    "ai_provider_obligations": """
+Objetivo da resposta:
+- Responder sobre obrigações do prestador de sistemas de IA de risco elevado segundo o AI Act.
+- Priorizar AI_ACT Artigo 16.
+- Usar Artigos 9 a 15 apenas quando estiverem no contexto e sustentarem requisitos específicos.
+- Não responder com classificação MDR nem com classes MDR.
+- Não usar fontes MDR para obrigações do prestador AI Act.
+""",
+
+    "ai_high_risk": """
+Objetivo da resposta:
+- Responder se o sistema de IA é ou pode ser de risco elevado segundo o AI Act.
+- Priorizar AI_ACT Artigo 6 e, quando disponível, AI_ACT ANEXO III.
+- Se o produto for dispositivo médico com IA, explicar que pode ser de risco elevado conforme o enquadramento do Artigo 6, mas sem inventar detalhes fora do contexto.
+- Não responder com Classe I, IIa, IIb ou III do MDR.
+- Não usar MDR Anexo VIII para classificar risco AI Act.
+""",
+
+    "gspr_requirements": """
+Objetivo da resposta:
+- Responder sobre os requisitos gerais de segurança e desempenho do MDR.
+- Priorizar MDR ANEXO I.
+- Organizar por grupos de requisitos quando possível: requisitos gerais, conceção/fabrico, informação fornecida com o dispositivo.
+- Não usar Artigo 55, Artigo 57, Anexo VII, Anexo X, Anexo XIII ou Artigo 117 como fontes principais.
+""",
+
+    "device_qualification": """
+Objetivo da resposta:
+- Responder se o produto parece enquadrar-se como dispositivo médico segundo o MDR.
+- Priorizar MDR Artigo 2 e MDR (19), quando disponíveis.
+- A conclusão deve depender da finalidade prevista pelo fabricante.
+- Se for apenas bem-estar, estilo de vida ou hidratação sem finalidade médica específica, dizer que em princípio não é dispositivo médico.
+- Se houver finalidade médica específica, como diagnóstico, prevenção, monitorização, previsão, prognóstico, tratamento ou atenuação de doença, explicar que pode ser dispositivo médico.
+- Não uses Artigo 10, Anexo XIII, UDI, PMS ou documentação técnica para decidir se algo é dispositivo médico.
+- Não digas que o MDR se aplica a animais.
+- Não inventes expressões que não estejam no contexto.
+- Não faças citações literais entre aspas, a menos que copies exatamente do contexto.
+- Evita resposta absoluta quando a finalidade prevista não estiver totalmente definida.
+""",
+
+    "clinical_evaluation_terms": """
+Objetivo da resposta:
+- Explicar claramente a diferença entre avaliação clínica, investigação clínica e PMCF.
+- Priorizar MDR Artigo 61 e MDR Anexo XIV.
+- Se disponível, usar definições do MDR Artigo 2.
+- Não dizer que investigação clínica não existe como termo distinto.
+- Explicar PMCF como acompanhamento clínico pós-comercialização, não como 'Post-Comercialização Clinical Evaluation'.
+- Organizar a resposta em 3 blocos: avaliação clínica, investigação clínica e PMCF.
+""",
+
+"pms_plan": """
+Objetivo da resposta:
+- Responder apenas sobre o plano de vigilância pós-comercialização/PMS.
+- Priorizar MDR Artigo 83, MDR Artigo 84 e MDR ANEXO III.
+- Não misturar com PMCF, investigação clínica, SSCP ou avaliação por organismo notificado, salvo se a pergunta pedir essa ligação.
+- Organizar a resposta como checklist prática do conteúdo do plano PMS.
+- Não usar Artigo 32, Artigo 45, Artigo 55, Artigo 71 ou Artigo 74 como fontes principais.
+""",
+
+"pmcf": """
+Objetivo da resposta:
+- Explicar o que é o PMCF/ACPC e quando entra na avaliação clínica.
+- Priorizar MDR Artigo 61 e MDR ANEXO XIV.
+- Explicar que o PMCF é acompanhamento clínico pós-comercialização e atualiza a avaliação clínica.
+- Não transformar a resposta numa comparação longa com investigação clínica, salvo se o utilizador perguntar por essa diferença.
+""",
+
+"classification_and_scope": """
+Objetivo da resposta:
+- Responder a todas as partes da pergunta: qualificação como dispositivo médico, classe MDR provável e regulamentação/obrigações principais.
+- Começar por dizer que a qualificação depende da finalidade prevista pelo fabricante.
+- Para a classe MDR, usar MDR Artigo 51, MDR Anexo VIII e a regra aplicável.
+- Para dispositivos não invasivos simples, considerar Regra 1 quando estiver no contexto.
+- Para dispositivos digitais/ativos destinados a diagnóstico ou monitorização, considerar Regra 10 quando estiver no contexto.
+- Para software que presta informações usadas em decisões diagnósticas ou terapêuticas, considerar Regra 11 quando estiver no contexto.
+- Depois listar os principais blocos do MDR a cumprir: colocação no mercado, obrigações do fabricante, requisitos gerais de segurança e desempenho, documentação técnica, avaliação clínica, PMS/vigilância pós-comercialização, avaliação da conformidade e marcação CE, apenas quando houver fontes no contexto.
+- Só mencionar AI Act se a pergunta mencionar IA, inteligência artificial, algoritmo de IA, machine learning ou sistema de IA.
+- Não incluir uma secção sobre IA se a pergunta não falar de IA.
+- Terminar com condições a confirmar.
+""",
+
+"ai_human_oversight": """
+Objetivo da resposta:
+- Responder especificamente sobre supervisão humana em sistemas de IA de risco elevado.
+- Priorizar AI_ACT Artigo 14.
+- Explicar que a supervisão humana serve para prevenir ou minimizar riscos para saúde, segurança e direitos fundamentais.
+- Não responder com obrigações genéricas do prestador do Artigo 16, exceto como nota complementar.
+- Não falar de classes MDR.
+""",
+
+"ai_high_risk_requirements": """
+Objetivo da resposta:
+- Responder sobre os requisitos que um sistema de IA de risco elevado deve cumprir antes da colocação no mercado.
+- Priorizar AI_ACT Artigos 8 a 15.
+- Organizar por: gestão de risco, dados/governação, documentação técnica, registos, transparência/instruções, supervisão humana, exatidão/robustez/cibersegurança.
+- Pode mencionar obrigações do prestador, avaliação da conformidade e declaração UE de conformidade se AI_ACT Artigo 16, Artigo 43 ou Artigo 47 estiverem no contexto.
+- Não misturar com classes MDR.
+""",
+
+"pmcf_plan": """
+Objetivo da resposta:
+- Responder sobre o conteúdo de um plano PMCF/ACPC.
+- Priorizar MDR Artigo 61, MDR ANEXO XIV e MDR ANEXO III quando disponíveis.
+- Dar uma checklist prática do que o plano deve conter.
+- Não iniciar o fluxo de geração de documento.
+- Não inventar classe MDR, regra MDR ou categoria AI Act se a pergunta não descrever um dispositivo concreto.
+""",
+
+"pms_pmcf_vigilance": """
+Objetivo da resposta:
+- Explicar a diferença entre PMS, PMCF/ACPC e vigilância.
+- PMS: sistema/processo geral de monitorização pós-comercialização.
+- PMCF/ACPC: componente clínica pós-comercialização que atualiza a avaliação clínica.
+- Vigilância: reporte e gestão de incidentes graves, ações corretivas de segurança e tendências.
+- Priorizar MDR Artigo 83, Artigo 84, Anexo III, Artigo 87/88 e Anexo XIV quando disponíveis.
 """,
 }
 
@@ -191,21 +333,35 @@ GENERATION_MAX_ITEMS_BY_INTENT = {
     "document_generation": 8,
     "classification_risk": 6,
     "manufacturer_obligations": 8,
+
+    "ai_provider_obligations": 8,
+    "ai_high_risk": 6,
+    "gspr_requirements": 8,
+    "device_qualification": 6,
+    "clinical_evaluation_terms": 8,
+    "classification_and_scope": 10,
+    "pms_plan": 6,
+    "pmcf": 6,
+    "ai_human_oversight": 6,
+    "ai_high_risk_requirements": 8,
+    "pmcf_plan": 8,
+    "pms_pmcf_vigilance": 8,
 }
 
 
 def embed_query_text(text: str) -> List[float]:
     """
-    Gera embedding para uma pergunta usando o modelo configurado no Ollama.
+    Gera embedding para uma pergunta usando o mesmo método usado na indexação.
     """
     if not OLLAMA_EMBED_MODEL:
         raise ValueError("Falta OLLAMA_EMBED_MODEL no .env")
 
-    response = ollama.embeddings(
+    response = ollama.embed(
         model=OLLAMA_EMBED_MODEL,
-        prompt=text,
+        input=text,
     )
-    return response["embedding"]
+
+    return response["embeddings"][0]
 
 
 def extract_chunk_text_from_chroma_document(document: str) -> str:
@@ -462,6 +618,160 @@ def normalized_source_text(record: Dict[str, Any]) -> str:
     return text.lower()
 
 
+def has_mdr_rule(text: str, rule_number: int) -> bool:
+    """
+    Deteta regras MDR mesmo quando o PDF vem como:
+    - Regra 10
+    - Regra n.o 10
+    - Regra n.º 10
+    - Regra no 10
+    """
+    pattern = rf"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?{rule_number}\b"
+    return re.search(pattern, text, flags=re.IGNORECASE) is not None
+
+
+def has_any_mdr_rule(text: str, rule_numbers: List[int]) -> bool:
+    return any(has_mdr_rule(text, n) for n in rule_numbers)
+
+
+def has_generation_citation(
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+    citation: str,
+) -> bool:
+    wanted = citation.strip().lower()
+
+    for idx in generation_indices:
+        got = str(records[idx].get("citation_label", "") or "").strip().lower()
+        if got == wanted:
+            return True
+
+    return False
+
+
+def answer_mentions_citation(answer: str, citation: str) -> bool:
+    """
+    Verifica se uma citação aparece realmente na resposta final.
+    Isto evita marcar como 'Utilizada' fontes que só foram enviadas ao LLM.
+    """
+    if not answer or not citation:
+        return False
+
+    pattern = re.escape(citation.strip())
+    return re.search(pattern, answer, flags=re.IGNORECASE) is not None
+
+
+def cited_generation_indices(
+    answer: str,
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+) -> List[int]:
+    """
+    Mantém apenas as fontes cuja citation_label aparece na resposta final.
+    """
+    used = []
+
+    for idx in generation_indices:
+        citation = str(records[idx].get("citation_label", "") or "").strip()
+        if citation and answer_mentions_citation(answer, citation):
+            used.append(idx)
+
+    return used
+
+def is_general_manufacturer_obligations_question(question: str) -> bool:
+    q = (question or "").lower()
+
+    return (
+        "fabricante" in q
+        and (
+            "obrigações gerais" in q
+            or "obrigacoes gerais" in q
+            or "que obrigações" in q
+            or "que obrigacoes" in q
+            or "obrigações tem" in q
+            or "obrigacoes tem" in q
+        )
+        and (
+            "mdr" in q
+            or "dispositivo médico" in q
+            or "dispositivo medico" in q
+        )
+    )
+
+
+def build_canonical_manufacturer_obligations_answer(
+    *,
+    question: str,
+    plan: Dict[str, Any],
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+) -> Optional[str]:
+    if not is_general_manufacturer_obligations_question(question):
+        return None
+
+    fixed = build_fixed_regulations_section(plan)
+
+    obligations = []
+
+    if has_generation_citation(generation_indices, records, "MDR Artigo 10"):
+        obligations.extend([
+            "1. Garantir que o dispositivo é concebido e fabricado em conformidade com os requisitos aplicáveis do MDR. [MDR Artigo 10]",
+            "2. Implementar, manter, atualizar e melhorar continuamente um sistema de gestão da qualidade. [MDR Artigo 10]",
+            "3. Implementar e manter um sistema de gestão de risco. [MDR Artigo 10]",
+            "4. Elaborar e manter a documentação técnica do dispositivo. [MDR Artigo 10]",
+            "5. Assegurar procedimentos para manter a conformidade da produção em série. [MDR Artigo 10]",
+        ])
+
+    if has_generation_citation(generation_indices, records, "MDR Artigo 61"):
+        obligations.append(
+            "6. Realizar e manter uma avaliação clínica adequada ao dispositivo. [MDR Artigo 61]"
+        )
+
+    if has_generation_citation(generation_indices, records, "MDR Artigo 83"):
+        obligations.append(
+            "7. Estabelecer, aplicar, documentar e manter um sistema de monitorização pós-comercialização. [MDR Artigo 83]"
+        )
+
+    if has_generation_citation(generation_indices, records, "MDR Artigo 15"):
+        obligations.append(
+            "8. Dispor de uma pessoa responsável pela observância da regulamentação, quando aplicável. [MDR Artigo 15]"
+        )
+
+    if has_generation_citation(generation_indices, records, "MDR Artigo 19"):
+        obligations.append(
+            "9. Elaborar a Declaração UE de Conformidade quando a conformidade tiver sido demonstrada. [MDR Artigo 19]"
+        )
+
+    if has_generation_citation(generation_indices, records, "MDR Artigo 27"):
+        obligations.append(
+            "10. Cumprir os requisitos aplicáveis ao sistema de identificação única dos dispositivos, incluindo UDI. [MDR Artigo 27]"
+        )
+
+    obligations = obligations[:10]
+
+    citations = []
+    for c in [
+        "MDR Artigo 10",
+        "MDR Artigo 15",
+        "MDR Artigo 19",
+        "MDR Artigo 27",
+        "MDR Artigo 61",
+        "MDR Artigo 83",
+    ]:
+        if has_generation_citation(generation_indices, records, c):
+            citations.append(f"- {c}")
+
+    body = [
+        "2. Obrigações gerais do fabricante segundo o MDR",
+        *obligations,
+        "",
+        "3. Citações usadas",
+        *citations,
+    ]
+
+    return f"{fixed}\n\n" + "\n".join(body).strip()
+
+
 def try_add_best_match(
     chosen: List[int],
     used_keys: set,
@@ -635,6 +945,276 @@ def is_bad_manufacturer_obligations_source(record: Dict[str, Any]) -> bool:
         "capitulo v",
         "classificação e avaliação da conformidade",
         "classificacao e avaliacao da conformidade",
+        "artigo 105",
+        "atribuições do mdcg",
+        "atribuicoes do mdcg",
+        "mdcg",
+        "artigo 106",
+        "artigo 107",
+        "comissão",
+        "comissao",
+        "autoridades competentes",
+        "autoridade competente",
+        "grupo de coordenação dos dispositivos médicos",
+        "grupo de coordenacao dos dispositivos medicos",
+    ]
+
+    return any(p in text for p in bad_patterns)
+
+
+def is_good_ai_provider_obligations_source(record: Dict[str, Any]) -> bool:
+    if record.get("short_name") != "AI_ACT":
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    good_patterns = [
+        "artigo 16",
+        "obrigações dos prestadores",
+        "obrigacoes dos prestadores",
+        "artigo 9",
+        "sistema de gestão de riscos",
+        "sistema de gestao de riscos",
+        "artigo 10",
+        "dados e governação dos dados",
+        "dados e governacao dos dados",
+        "artigo 11",
+        "documentação técnica",
+        "documentacao tecnica",
+        "artigo 12",
+        "conservação de registos",
+        "conservacao de registos",
+        "artigo 13",
+        "transparência",
+        "transparencia",
+        "artigo 14",
+        "supervisão humana",
+        "supervisao humana",
+        "artigo 15",
+        "exatidão",
+        "exatidao",
+        "robustez",
+        "cibersegurança",
+        "ciberseguranca",
+    ]
+
+    return any(p in text for p in good_patterns)
+
+
+def is_good_ai_high_risk_source(record: Dict[str, Any]) -> bool:
+    if record.get("short_name") != "AI_ACT":
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    good_patterns = [
+        "artigo 6",
+        "regras para a classificação de sistemas de ia de risco elevado",
+        "regras para a classificacao de sistemas de ia de risco elevado",
+        "anexo iii",
+        "sistemas de ia de risco elevado",
+        "artigo 43",
+        "avaliação da conformidade",
+        "avaliacao da conformidade",
+    ]
+
+    return any(p in text for p in good_patterns)
+
+
+def is_good_gspr_source(record: Dict[str, Any]) -> bool:
+    if record.get("short_name") != "MDR":
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    # Para perguntas GSPR, a fonte principal deve ser o Anexo I.
+    return re.search(r"\banexo\s+i\b", text) is not None
+
+
+def is_good_device_qualification_source(record: Dict[str, Any]) -> bool:
+    if record.get("short_name") != "MDR":
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    good_patterns = [
+        "artigo 2",
+        "definições",
+        "definicoes",
+        "dispositivo médico",
+        "dispositivo medico",
+        "software",
+        "fim médico específico",
+        "fim medico especifico",
+        "finalidade médica",
+        "finalidade medica",
+        "considerando (19)",
+        "estilo de vida",
+        "bem-estar",
+    ]
+
+    bad_patterns = [
+        "artigo 10",
+        "obrigações gerais dos fabricantes",
+        "obrigacoes gerais dos fabricantes",
+        "anexo xiii",
+        "dispositivos feitos por medida",
+        "documentação técnica",
+        "documentacao tecnica",
+        "anexo vi",
+        "udi",
+    ]
+
+    return any(p in text for p in good_patterns) and not any(p in text for p in bad_patterns)
+
+
+def is_good_clinical_evaluation_terms_source(record: Dict[str, Any]) -> bool:
+    if record.get("short_name") != "MDR":
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    good_patterns = [
+        "artigo 2",
+        "artigo 61",
+        "artigo 62",
+        "avaliação clínica",
+        "avaliacao clinica",
+        "investigação clínica",
+        "investigacao clinica",
+        "anexo xiv",
+        "acompanhamento clínico pós-comercialização",
+        "acompanhamento clinico pos-comercializacao",
+        "pmcf",
+        "evidência clínica",
+        "evidencia clinica",
+    ]
+
+    bad_patterns = [
+        "artigo 45",
+        "organismo notificado",
+        "anexo vii",
+        "anexo xiii",
+        "declaração ue de conformidade",
+        "declaracao ue de conformidade",
+    ]
+
+    return any(p in text for p in good_patterns) and not any(p in text for p in bad_patterns)
+
+
+def is_good_pms_plan_source(record: Dict[str, Any]) -> bool:
+    if record.get("short_name") != "MDR":
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    good_patterns = [
+        "artigo 83",
+        "sistema de monitorização pós-comercialização",
+        "sistema de monitorizacao pos-comercializacao",
+        "artigo 84",
+        "plano de vigilância pós-comercialização",
+        "plano de vigilancia pos-comercializacao",
+        "anexo iii",
+        "documentação técnica relativa à monitorização pós-comercialização",
+        "documentacao tecnica relativa a monitorizacao pos-comercializacao",
+    ]
+
+    bad_patterns = [
+        "artigo 32",
+        "artigo 45",
+        "artigo 55",
+        "artigo 71",
+        "artigo 74",
+        "anexo vii",
+        "anexo x",
+        "anexo xiv",
+        "organismo notificado",
+        "investigação clínica",
+        "investigacao clinica",
+    ]
+
+    return any(p in text for p in good_patterns) and not any(p in text for p in bad_patterns)
+
+
+def is_good_pmcf_source(record: Dict[str, Any]) -> bool:
+    if record.get("short_name") != "MDR":
+        return False
+
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    good_patterns = [
+        "artigo 61",
+        "anexo xiv",
+        "acompanhamento clínico pós-comercialização",
+        "acompanhamento clinico pos-comercializacao",
+        "pmcf",
+        "acpc",
+        "avaliação clínica",
+        "avaliacao clinica",
+    ]
+
+    bad_patterns = [
+        "artigo 45",
+        "artigo 55",
+        "anexo vii",
+        "organismo notificado",
+        "declaração ue de conformidade",
+        "declaracao ue de conformidade",
+    ]
+
+    return any(p in text for p in good_patterns) and not any(p in text for p in bad_patterns)
+
+def is_bad_gspr_source(record: Dict[str, Any]) -> bool:
+    text = (
+        normalized_source_text(record)
+        + " "
+        + str(record.get("chunk_text", "") or "").lower()
+    )
+
+    bad_patterns = [
+        "artigo 55",
+        "artigo 57",
+        "artigo 105",
+        "artigo 117",
+        "anexo vii",
+        "anexo x",
+        "anexo xiii",
+        "organismos notificados",
+        "organismo notificado",
+        "mecanismo de escrutínio",
+        "mecanismo de escrutinio",
+        "alteração da diretiva",
+        "alteracao da diretiva",
+        "dispositivos feitos por medida",
     ]
 
     return any(p in text for p in bad_patterns)
@@ -759,29 +1339,151 @@ def select_generation_indices(
             p += 0.15
         elif section_type == "chapter":
             p -= 0.10
+            
+        if intent == "classification_and_scope":
+            if short_name == "MDR":
+                if "artigo 2" in text or "dispositivo médico" in text or "dispositivo medico" in text:
+                    p += 0.45
 
-        if intent == "classification_risk":
+                if "artigo 51" in text or "classificação dos dispositivos" in text or "classificacao dos dispositivos" in text:
+                    p += 0.50
+
+                if "anexo viii" in text or "regras de classificação" in text or "regras de classificacao" in text:
+                    p += 0.55
+
+                if has_mdr_rule(text, 10):
+                    p += 0.70 if plan.get("is_thermometer") else 0.35
+
+                if has_mdr_rule(text, 11):
+                    p += 0.70 if plan.get("is_software") else 0.35
+
+                if has_mdr_rule(text, 1):
+                    p += 0.40
+
+                if "artigo 5" in text or "colocação no mercado" in text or "colocacao no mercado" in text:
+                    p += 0.35
+
+                if "artigo 10" in text or "obrigações gerais dos fabricantes" in text or "obrigacoes gerais dos fabricantes" in text:
+                    p += 0.45
+
+                if "anexo i" in text or "requisitos gerais de segurança e desempenho" in text or "requisitos gerais de seguranca e desempenho" in text:
+                    p += 0.35
+
+                if "anexo ii" in text or "documentação técnica" in text or "documentacao tecnica" in text:
+                    p += 0.30
+
+                if "artigo 61" in text or "avaliação clínica" in text or "avaliacao clinica" in text:
+                    p += 0.25
+
+                if "artigo 83" in text or "vigilância pós-comercialização" in text or "vigilancia pos-comercializacao" in text:
+                    p += 0.25
+
+                if "artigo 20" in text or "marcação ce" in text or "marcacao ce" in text:
+                    p += 0.25
+
+            if short_name == "AI_ACT":
+                if plan.get("mentions_ai") and ("artigo 6" in text or "risco elevado" in text or "alto risco" in text):
+                    p += 0.45
+                elif not plan.get("mentions_ai"):
+                    p -= 2.00
+        
+
+        elif intent == "classification_risk":
             if "artigo 51" in text or "classificação dos dispositivos" in text or "classificacao dos dispositivos" in text:
                 p += 0.50
 
             if "anexo viii" in text or "regras de classificação" in text or "regras de classificacao" in text:
                 p += 0.55
+                
+            if has_mdr_rule(text, 5):
+                p += 1.20 if plan.get("is_urinary_catheter") else 0.20
 
-            if "regra 1" in text:
-                p += 0.75
+            if has_mdr_rule(text, 8):
+                p += 1.20 if plan.get("is_orthopedic_implant") else 0.20
 
-            if "regra 2" in text or "regra 3" in text or "regra 4" in text:
-                p += 0.35
+            if has_mdr_rule(text, 10):
+                if plan.get("is_cardiac_monitoring"):
+                    p += 1.20
+                elif plan.get("is_active_or_digital_thermometer"):
+                    p += 0.95
+                elif plan.get("is_simple_thermometer"):
+                    p -= 0.35
+                else:
+                    p += 0.45
+                
+            if "regra 11" in text:
+                p += 0.95 if (plan.get("is_software") or plan.get("mentions_ai")) else 0.45
+
+            if has_mdr_rule(text, 11):
+                p += 0.95 if (plan.get("is_software") or plan.get("mentions_ai")) else 0.45
+
+            if has_mdr_rule(text, 1):
+                if plan.get("is_simple_thermometer"):
+                    p += 0.95
+                elif plan.get("is_thermometer") and not plan.get("is_active_or_digital_thermometer"):
+                    p += 0.70
+                elif plan.get("is_software") or plan.get("mentions_ai"):
+                    p += 0.10
+                else:
+                    p += 0.55
+
+            if has_any_mdr_rule(text, [2, 3, 4]):
+                p += 0.25
 
             if "não invasivo" in text or "nao invasivo" in text:
-                p += 0.65
+                if plan.get("is_thermometer") or plan.get("is_software") or plan.get("mentions_ai"):
+                    p += 0.10
+                else:
+                    p += 0.35
 
             if "medição" in text or "medicao" in text or "temperatura" in text or "termómetro" in text or "termometro" in text:
-                p += 0.35
+                p += 0.45
 
             if is_bad_for_classification(idx):
                 p -= 1.50
 
+        
+        elif intent == "ai_provider_obligations":
+            if short_name == "AI_ACT":
+                p += 0.30
+
+            if "artigo 16" in text or "obrigações dos prestadores" in text or "obrigacoes dos prestadores" in text:
+                p += 0.90
+
+            if any(x in text for x in ["artigo 9", "artigo 10", "artigo 11", "artigo 12", "artigo 13", "artigo 14", "artigo 15"]):
+                p += 0.35
+
+            if short_name != "AI_ACT":
+                p -= 2.00
+
+
+        elif intent == "ai_high_risk":
+            if short_name == "AI_ACT":
+                p += 0.30
+
+            if "artigo 6" in text or "risco elevado" in text or "alto risco" in text:
+                p += 0.90
+
+            if "anexo iii" in text:
+                p += 0.55
+
+            if "artigo 43" in text or "avaliação da conformidade" in text or "avaliacao da conformidade" in text:
+                p += 0.25
+
+            if short_name != "AI_ACT":
+                p -= 2.00
+
+
+        elif intent == "gspr_requirements":
+            if short_name == "MDR":
+                p += 0.30
+
+            if "anexo i" in text or "requisitos gerais de segurança e desempenho" in text or "requisitos gerais de seguranca e desempenho" in text:
+                p += 1.00
+
+            if is_bad_gspr_source(r):
+                p -= 2.00
+        
         
         elif intent == "manufacturer_obligations":
             if "artigo 10" in text or "obrigações gerais dos fabricantes" in text or "obrigacoes gerais dos fabricantes" in text:
@@ -913,12 +1615,43 @@ def select_generation_indices(
 
         if key in used_keys:
             return False
+        
+        if intent == "classification_and_scope":
+            if r.get("short_name") == "AI_ACT":
+                if plan.get("mentions_ai") and is_good_ai_high_risk_source(r):
+                    pass
+                else:
+                    return False
+            else:
+                if (
+                    is_good_classification_source(r)
+                    or is_good_device_qualification_source(r)
+                    or is_good_regulatory_scope_source(r)
+                    or is_good_manufacturer_obligations_source(r)
+                    or is_good_gspr_source(r)
+                ):
+                    pass
+                else:
+                    return False
+                
 
-        if intent == "classification_risk":
-            if is_bad_for_classification(idx):
-                return False
-            if not is_good_classification_source(r):
-                return False
+        elif intent == "classification_risk":
+            if r.get("short_name") == "AI_ACT":
+                if plan.get("mentions_ai") and is_good_ai_high_risk_source(r):
+                    pass
+                else:
+                    return False
+
+            else:
+                if is_bad_for_classification(idx):
+                    return False
+
+                if is_good_classification_source(r):
+                    pass
+                elif plan.get("asks_hybrid_device_and_classification") and is_good_device_qualification_source(r):
+                    pass
+                else:
+                    return False
 
         if intent == "manufacturer_obligations":
             if is_bad_manufacturer_obligations_source(r):
@@ -931,6 +1664,20 @@ def select_generation_indices(
             if is_bad_regulatory_scope_source(r):
                 return False
             if not is_good_regulatory_scope_source(r):
+                return False
+            
+        if intent == "ai_provider_obligations":
+            if not is_good_ai_provider_obligations_source(r):
+                return False
+
+        if intent == "ai_high_risk":
+            if not is_good_ai_high_risk_source(r):
+                return False
+
+        if intent == "gspr_requirements":
+            if is_bad_gspr_source(r):
+                return False
+            if not is_good_gspr_source(r):
                 return False
 
         chosen.append(idx)
@@ -950,7 +1697,43 @@ def select_generation_indices(
     # -----------------------------------------------------------------------
     # Obrigações do fabricante MDR — fontes nucleares
     # -----------------------------------------------------------------------
-    if intent == "manufacturer_obligations":
+    if intent == "ai_provider_obligations":
+        for wanted in [
+            "artigo 16",
+            "artigo 9",
+            "artigo 10",
+            "artigo 11",
+            "artigo 12",
+            "artigo 13",
+            "artigo 14",
+            "artigo 15",
+        ]:
+            add_best_match([
+                lambda r, text, wanted=wanted: r.get("short_name") == "AI_ACT",
+                lambda r, text, wanted=wanted: wanted in text,
+            ])
+
+
+    elif intent == "ai_high_risk":
+        for wanted in [
+            "artigo 6",
+            "anexo iii",
+            "artigo 43",
+        ]:
+            add_best_match([
+                lambda r, text, wanted=wanted: r.get("short_name") == "AI_ACT",
+                lambda r, text, wanted=wanted: wanted in text,
+            ])
+
+
+    elif intent == "gspr_requirements":
+        add_best_match([
+            lambda r, text: r.get("short_name") == "MDR",
+            lambda r, text: "anexo i" in text or "requisitos gerais de segurança e desempenho" in text or "requisitos gerais de seguranca e desempenho" in text,
+        ])
+    
+    
+    elif intent == "manufacturer_obligations":
         for wanted in [
             "artigo 10",
             "artigo 15",
@@ -973,6 +1756,41 @@ def select_generation_indices(
             ])
     
     
+    elif intent == "classification_and_scope":
+        wanted_terms = [
+            "artigo 2",
+            "artigo 51",
+            "anexo viii",
+            "artigo 5",
+            "artigo 10",
+            "anexo i",
+            "anexo ii",
+            "artigo 61",
+            "artigo 83",
+            "artigo 20",
+        ]
+
+        if plan.get("is_urinary_catheter"):
+            wanted_terms.insert(3, "regra 5")
+        elif plan.get("is_orthopedic_implant"):
+            wanted_terms.insert(3, "regra 8")
+        elif plan.get("is_cardiac_monitoring"):
+            wanted_terms.insert(3, "regra 10")
+        elif plan.get("is_thermometer"):
+            wanted_terms.insert(3, "regra 10")
+        elif plan.get("is_software"):
+            wanted_terms.insert(3, "regra 11")
+        else:
+            wanted_terms.insert(3, "regra 1")
+
+        if plan.get("mentions_ai"):
+            wanted_terms.extend(["artigo 6", "anexo iii"])
+
+        for wanted in wanted_terms:
+            add_best_match([
+                lambda r, text, wanted=wanted: wanted in text,
+            ])
+    
     # -----------------------------------------------------------------------
     # Classificação MDR — fontes nucleares
     # -----------------------------------------------------------------------
@@ -989,17 +1807,48 @@ def select_generation_indices(
             lambda r, text: "anexo viii" in text and ("regras de classificação" in text or "regras de classificacao" in text),
         ])
 
-        # Regra 1 / dispositivos não invasivos
-        add_best_match([
-            lambda r, text: r.get("short_name") == "MDR",
-            lambda r, text: "regra 1" in text or "não invasivo" in text or "nao invasivo" in text,
-        ])
+        if plan.get("is_urinary_catheter"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 5),
+            ])
 
-        # Caso haja uma regra sobre medição/temperatura, também é útil
-        add_best_match([
-            lambda r, text: r.get("short_name") == "MDR",
-            lambda r, text: "medição" in text or "medicao" in text or "temperatura" in text or "termómetro" in text or "termometro" in text,
-        ])
+        elif plan.get("is_orthopedic_implant"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 8),
+            ])
+
+        elif plan.get("is_cardiac_monitoring"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 10),
+            ])
+
+        elif plan.get("is_simple_thermometer"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 1) or "não invasivo" in text or "nao invasivo" in text,
+            ])
+
+        elif plan.get("is_active_or_digital_thermometer"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 10),
+            ])
+
+        elif plan.get("is_software") or plan.get("mentions_ai"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 11),
+            ])
+
+        else:
+            for rule_no in [1, 5, 8, 10, 11]:
+                add_best_match([
+                    lambda r, text: r.get("short_name") == "MDR",
+                    lambda r, text, rule_no=rule_no: has_mdr_rule(text, rule_no),
+                ])
 
     # -----------------------------------------------------------------------
     # Âmbito regulatório — fontes nucleares
@@ -1171,6 +2020,66 @@ def build_contextual_question(
         f"Pergunta atual do utilizador:\n{question}"
     )
 
+
+def is_explicit_follow_up_question(question: str) -> bool:
+    """
+    Deteta apenas follow-ups explícitas.
+
+    Importante:
+    - Não usar comprimento da pergunta.
+    - Perguntas curtas podem ser perguntas independentes.
+    - O histórico só deve entrar quando o utilizador referencia claramente
+      algo anterior.
+    """
+    q = (question or "").strip().lower()
+
+    follow_up_markers = [
+        "em relação à pergunta anterior",
+        "em relacao a pergunta anterior",
+        "em relação à resposta anterior",
+        "em relacao a resposta anterior",
+        "em relação à primeira pergunta",
+        "em relacao a primeira pergunta",
+        "em relação à segunda pergunta",
+        "em relacao a segunda pergunta",
+        "em relação à terceira pergunta",
+        "em relacao a terceira pergunta",
+        "como disse antes",
+        "como referido antes",
+        "como falámos",
+        "como falamos",
+        "o dispositivo anterior",
+        "a app anterior",
+        "o software anterior",
+        "esse dispositivo",
+        "essa app",
+        "esse software",
+        "esse sistema",
+        "este dispositivo",
+        "esta app",
+        "este software",
+        "este sistema",
+        "o mesmo dispositivo",
+        "a mesma app",
+        "o mesmo software",
+        "o mesmo sistema",
+        "nesse caso",
+        "neste caso",
+        "com base nisso",
+        "com base na resposta anterior",
+        "com base na análise anterior",
+        "com base na analise anterior",
+        "faz o documento",
+        "gera o documento",
+        "cria o documento",
+        "gera o pmcf",
+        "faz o pmcf",
+        "faz agora o documento pmcf",
+    ]
+
+    return any(marker in q for marker in follow_up_markers)
+
+
 def build_user_prompt(
     user_question: str,
     context: str,
@@ -1222,10 +2131,22 @@ Instruções adicionais:
 - Dá primeiro uma resposta curta e direta.
 - Depois explica apenas o que o contexto sustenta.
 """,
-        "conformity_procedure": """
+
+"conformity_procedure": """
 Instruções adicionais:
-- Organiza a resposta por passos.
+- Organiza a resposta por passos numerados.
+- Para um dispositivo Classe IIb, explica que o fabricante deve realizar avaliação da conformidade segundo o MDR Artigo 52.
+- Usa MDR ANEXO IX para o caminho baseado no sistema de gestão da qualidade e avaliação da documentação técnica, se estiver no contexto.
+- Usa MDR ANEXO X e MDR ANEXO XI como alternativa quando estiverem no contexto.
+- Inclui Declaração UE de Conformidade e marcação CE no fim do processo, se as fontes estiverem no contexto.
+- Evita usar MDR CAPÍTULO V como citação principal quando houver MDR Artigo 52, MDR ANEXO IX, MDR ANEXO X, MDR ANEXO XI, MDR Artigo 20 ou MDR ANEXO IV.
+- Quando explicares alternativas entre Anexo IX e Anexo X + Anexo XI, cita MDR Artigo 52 para a existência das alternativas.
+- Cita MDR ANEXO IX apenas para o caminho baseado no sistema de gestão da qualidade e avaliação da documentação técnica.
+- Cita MDR ANEXO X apenas para exame de tipo.
+- Cita MDR ANEXO XI apenas para verificação da conformidade do produto.
+- Nunca digas que a alternativa Anexo X + Anexo XI está detalhada no MDR ANEXO IX.
 """,
+
                 "documentation": """
 Instruções adicionais:
 - Organiza a resposta por tipos de documentação.
@@ -1236,12 +2157,18 @@ Instruções adicionais:
 "classification_risk": """
 Instruções adicionais:
 - Identifica primeiro a base normativa concreta: MDR Artigo 51, MDR Anexo VIII e a regra aplicável.
-- Para dispositivos não invasivos simples, usa a Regra 1 do Anexo VIII.
-- Se o contexto disser que todos os dispositivos não invasivos são Classe I salvo aplicação de outras regras, conclui claramente: "Classe provável: Classe I".
-- Se a pergunta disser apenas que é um termómetro não invasivo, responde que a classe provável é Classe I pela Regra 1, salvo se tiver funcionalidades que ativem outra regra.
+- Não assumas automaticamente Classe I só porque o dispositivo é não invasivo; mas, se for um dispositivo simples não invasivo e não houver sinais de dispositivo ativo/software/IA, considera a Regra 1 como ponto de partida.
+- Se o dispositivo for ativo, digital, mede/estima parâmetros fisiológicos, apoia diagnóstico ou monitorização clínica, considera primeiro as regras de dispositivos ativos e/ou software antes da Regra 1.
+- Para software que presta informações usadas em decisões com fins terapêuticos ou de diagnóstico, considera a Regra 11 quando estiver no contexto.
+- Para dispositivos ativos destinados a diagnóstico ou monitorização, considera a Regra 10 quando estiver no contexto.
+- Se houver IA, separa sempre a classe MDR da categoria de risco do AI Act.
+- A conclusão deve ser condicional quando faltarem finalidade prevista, utilizadores, criticidade da decisão ou impacto clínico.
 - Se a pergunta mencionar termómetro digital ativo, diagnóstico direto, monitorização ou parâmetros fisiológicos vitais, considera também a Regra 10 e explica que a classe pode mudar conforme a finalidade concreta.
 - Não uses fontes sobre documentação técnica, declaração UE de conformidade, registo, EUDAMED, avaliação da conformidade, organismos notificados ou considerandos para decidir a classe.
 - Termina com uma conclusão prática curta: "Classe provável: ...", seguida das condições a confirmar.
+- Evita respostas vagas como "não está claro" quando existir Regra 10 ou Regra 11 no contexto.
+- Para termómetro digital/ativo com diagnóstico ou monitorização: "Classe provável: Classe IIa", a confirmar pela finalidade prevista.
+- Para software de apoio ao diagnóstico: "Classe provável: Classe IIa", podendo subir para IIb/III conforme impacto clínico.
 """,
 
 "manufacturer_obligations": """
@@ -1255,6 +2182,12 @@ Instruções adicionais:
 - Não uses fontes sobre MDCG, Comissão, autoridades competentes, organismos notificados ou anexos institucionais.
 - Podes mencionar a pessoa responsável pela observância da regulamentação, declaração UE de conformidade, marcação CE, UDI, registo, avaliação clínica, PMS/PMCF e documentação técnica quando o contexto o sustentar.
 - No fim, inclui apenas as citações realmente usadas.
+- Sistema de vigilância/monitorização pós-comercialização deve ser citado com MDR Artigo 83, não MDR Artigo 61.
+- Avaliação clínica deve ser citada com MDR Artigo 61.
+- UDI / identificação única do dispositivo deve ser citado com MDR Artigo 27 quando essa fonte estiver no contexto.
+- Registo dos dispositivos deve ser citado com MDR Artigo 29.
+- Declaração UE de conformidade deve ser citada com MDR Artigo 19; usa MDR ANEXO IV apenas para o conteúdo da declaração.
+- Não repitas a mesma obrigação com palavras diferentes.
 """,
 
 "document_generation": """
@@ -1278,6 +2211,86 @@ Instruções adicionais:
   10. Limitações e informação em falta
   11. Citações usadas
 """,
+"ai_provider_obligations": """
+Instruções adicionais:
+- Responde apenas sobre obrigações do prestador segundo o AI Act.
+- Prioriza AI_ACT Artigo 16.
+- Podes usar AI_ACT Artigos 9 a 15 para detalhar requisitos de sistemas de IA de risco elevado se estiverem no contexto.
+- Não respondas com classe MDR.
+- Não uses MDR Anexo VIII.
+- Cada obrigação deve terminar com a citação correta.
+""",
+
+"ai_high_risk": """
+Instruções adicionais:
+- Responde sobre risco elevado segundo o AI Act, não sobre classe de risco MDR.
+- Prioriza AI_ACT Artigo 6 e AI_ACT ANEXO III quando disponíveis.
+- Se a resposta depender da finalidade do sistema de IA ou da sua integração como componente de segurança/produto regulado, diz isso claramente.
+- Nunca concluas "Classe I", "Classe IIa", "Classe IIb" ou "Classe III", porque isso pertence ao MDR e não ao AI Act.
+""",
+
+"gspr_requirements": """
+Instruções adicionais:
+- Responde sobre requisitos gerais de segurança e desempenho do MDR.
+- Usa MDR ANEXO I como fonte principal.
+- Organiza a resposta em categorias práticas.
+- Não uses fontes de organismos notificados, avaliação da conformidade, dispositivos feitos por medida ou alteração de diretivas.
+""",
+
+"device_qualification": """
+Instruções adicionais:
+- Decide primeiro com base na finalidade prevista pelo fabricante.
+- Se o produto tiver finalidade médica específica, como diagnóstico, prevenção, monitorização, previsão, prognóstico, tratamento ou atenuação de doença, diz que pode enquadrar-se como dispositivo médico.
+- Se for apenas bem-estar, estilo de vida ou hidratação geral sem finalidade médica específica, diz que em princípio não é dispositivo médico.
+- Usa MDR Artigo 2 para a definição.
+- Usa MDR (19) apenas para distinguir software médico de software de uso geral/bem-estar.
+- Não cites Artigo 10, Anexo XIII, UDI, PMS ou documentação técnica para decidir se algo é dispositivo médico.
+- Não digas que o MDR se aplica a animais.
+- Não uses aspas para frases que não sejam transcrições exatas do contexto.
+""",
+
+"clinical_evaluation_terms": """
+Instruções adicionais:
+- Organiza a resposta em 3 blocos: avaliação clínica, investigação clínica e PMCF.
+- Explica que avaliação clínica é o processo de avaliar dados clínicos para demonstrar segurança e desempenho.
+- Explica que investigação clínica é uma investigação realizada para demonstrar a conformidade do dispositivo quando aplicável.
+- Explica PMCF como acompanhamento clínico pós-comercialização.
+- Não digas que investigação clínica não é termo distinto.
+- Não traduzas PMCF como “Post-Comercialização Clinical Evaluation”.
+- Usa apenas as citações recuperadas no contexto.
+""",
+
+"pms_plan": """
+Instruções adicionais:
+- Responde sobre o plano PMS/vigilância pós-comercialização.
+- Usa MDR Artigo 83, MDR Artigo 84 e MDR ANEXO III quando estiverem no contexto.
+- Não uses Artigo 32, Artigo 45, Artigo 55, Artigo 71 ou Artigo 74.
+- Não confundas PMS com PMCF; podes mencionar PMCF apenas como possível entrada/ligação se estiver no contexto.
+""",
+
+"pmcf": """
+Instruções adicionais:
+- Explica PMCF como acompanhamento clínico pós-comercialização.
+- Diz quando deve ser incluído/considerado na avaliação clínica.
+- Usa MDR Artigo 61 e MDR ANEXO XIV quando estiverem no contexto.
+- Não faças uma resposta longa sobre investigação clínica salvo se a pergunta pedir comparação.
+""",
+
+"classification_and_scope": """
+Instruções adicionais:
+- Responde a todas as subperguntas do utilizador.
+- Se a pergunta pedir classe MDR e regulamentação aplicável, responde às duas.
+- Primeiro explica se o produto pode ser dispositivo médico, com base na finalidade prevista.
+- Depois indica a classe MDR provável com base no MDR Artigo 51, MDR Anexo VIII e na regra aplicável.
+- Para dispositivos não invasivos simples, considera Regra 1 quando estiver no contexto.
+- Para dispositivos digitais/ativos destinados a diagnóstico ou monitorização, considera Regra 10 quando estiver no contexto.
+- Para software que presta informações usadas em decisões de diagnóstico ou terapêuticas, considera Regra 11 quando estiver no contexto.
+- Depois lista os principais blocos regulatórios a cumprir: obrigações do fabricante, requisitos gerais de segurança e desempenho, documentação técnica, avaliação clínica, PMS/vigilância pós-comercialização, avaliação da conformidade e marcação CE, apenas quando existirem fontes no contexto.
+- Só menciones AI Act se a pergunta atual mencionar IA, inteligência artificial, algoritmo de IA, machine learning ou sistema de IA.
+- Não cries uma secção sobre IA se a pergunta não falar de IA.
+- Termina com condições a confirmar.
+""",
+
     }.get(intent, "")
 
     return f"""
@@ -1303,9 +2316,11 @@ Contexto recuperado:
 
 Regras finais:
 - Responde apenas com base no contexto.
+- Responde a todas as subperguntas do utilizador; se a pergunta pedir classe e regulamentação, responde às duas.
 - Quando fizeres uma afirmação normativa, associa-a à citação correta usando exatamente o campo "Citação:".
 - Nunca escrevas "FONTE 1", "FONTE 2", "FONTE 3" ou semelhante na resposta final.
 - Não cries uma nova secção 1.
+- Só menciones IA ou AI Act se a pergunta atual mencionar IA, inteligência artificial, algoritmo de IA, machine learning ou sistema de IA.
 - No fim, inclui apenas as citações realmente usadas.
 """
 
@@ -1342,6 +2357,20 @@ def sanitize_generated_answer(text: str) -> str:
     cleaned = re.sub(r"(?mi)^.*\bXXX\b.*$", "", cleaned)
     cleaned = re.sub(r"(?mi)^.*\bYYY\b.*$", "", cleaned)
     cleaned = re.sub(r"(?mi)^\s*1[\.\)]\s*regulamentos principais aplic[aá]veis.*$", "", cleaned)
+    
+    # Remove linhas soltas de contexto normativo que o modelo às vezes copia
+    # sem transformar em resposta útil.
+    cleaned = re.sub(
+        r"(?mi)^\s*Artigo\s+\d+\s+[^.\n]*(?:\n|$)",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?mi)^\s*ANEXO\s+[IVXLC]+\s+[^.\n]*(?:\n|$)",
+        "",
+        cleaned,
+    )
+    
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
     return cleaned
@@ -1471,6 +2500,101 @@ def build_low_confidence_answer(
         body.extend([f"- {c}" for c in citations])
 
     return f"{fixed_regulations_section}\n\n" + "\n".join(body).strip()
+
+
+def improve_answer_if_needed(
+    question: str,
+    answer: str,
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+    plan: Dict[str, Any],
+) -> str:
+    """
+    Pequena camada de segurança para corrigir respostas vagas ou citações trocadas
+    em casos recorrentes.
+    """
+    q = (question or "").lower()
+    a = answer or ""
+
+    context_text = " ".join(
+        str(records[idx].get("chunk_text", "") or "").lower()
+        for idx in generation_indices
+    )
+
+    def has_rule(rule_number: int) -> bool:
+        return re.search(
+            rf"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?{rule_number}\b",
+            context_text,
+            flags=re.IGNORECASE,
+        ) is not None
+
+    if plan.get("intent") == "classification_risk":
+        has_rule_10 = has_rule(10)
+        has_rule_11 = has_rule(11)
+
+        is_thermometer = (
+            "termómetro" in q
+            or "termometro" in q
+            or "temperatura" in q
+        )
+
+        is_software_diag = (
+            "software" in q
+            and (
+                "diagnóstico" in q
+                or "diagnostico" in q
+                or "radiografia" in q
+                or "radiografias" in q
+                or "pneumonia" in q
+            )
+        )
+
+        vague_answer = any(x in a.lower() for x in [
+            "não está claro",
+            "nao esta claro",
+            "não é possível determinar",
+            "nao e possivel determinar",
+            "classe provável: não",
+            "classe provavel: nao",
+        ])
+
+        if is_thermometer and has_rule_10 and vague_answer:
+            return a.strip() + (
+                "\n\nConclusão prática: Classe provável: Classe IIa, a confirmar conforme a finalidade prevista. "
+                "A Regra 10 é relevante quando o dispositivo ativo se destina a diagnóstico ou monitorização. "
+                "Se a função de IA/software prestar informações usadas em decisões diagnósticas ou terapêuticas, "
+                "a Regra 11 também deve ser avaliada. Se a finalidade for apenas bem-estar sem finalidade médica, "
+                "a qualificação como dispositivo médico pode mudar."
+            )
+
+        if is_software_diag and has_rule_11 and "classe iib" in a.lower() and "classe iia" not in a.lower():
+            return a.strip() + (
+                "\n\nNota de cautela: pela Regra 11, o ponto de partida para software que presta informações "
+                "usadas em decisões com fins diagnósticos ou terapêuticos é Classe IIa. A classificação pode subir "
+                "para Classe IIb ou Classe III se a decisão puder causar deterioração grave, intervenção cirúrgica, "
+                "morte ou deterioração irreversível. Assim, para apoio ao diagnóstico de pneumonia em radiografias, "
+                "a resposta deve ser apresentada como Classe provável IIa, podendo subir conforme o impacto clínico "
+                "e a finalidade prevista."
+            )
+
+    if plan.get("intent") == "manufacturer_obligations":
+        a = re.sub(
+            r"(sistema de (?:monitorização|monitorizacao|vigilância|vigilancia) pós-comercialização[^.\n]*?)MDR Artigo 61",
+            r"\1MDR Artigo 83",
+            a,
+            flags=re.IGNORECASE,
+        )
+        a = re.sub(
+            r"(UDI|identificação única do dispositivo|identificacao unica do dispositivo)([^.\n]*?)MDR Artigo 29",
+            r"\1\2MDR Artigo 27",
+            a,
+            flags=re.IGNORECASE,
+        )   
+        
+    a = a.replace("(UID)", "(UDI)")
+    a = a.replace(" UID", " UDI")
+
+    return a
 
 
 def is_bad_regulatory_scope_source(record: Dict[str, Any]) -> bool:
@@ -1613,7 +2737,7 @@ def is_bad_classification_source(record: Dict[str, Any]) -> bool:
     if re.search(r"\banexo\s+viii\b", text):
         return False
 
-    if re.search(r"\bregra\s+\d+\b", text):
+    if re.search(r"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?\d+\b", text):
         return False
 
     bad_regex_patterns = [
@@ -1629,6 +2753,7 @@ def is_bad_classification_source(record: Dict[str, Any]) -> bool:
         r"\bartigo\s+10\b",
         r"\bartigo\s+52\b",
         r"\bartigo\s+84\b",
+        r"\bartigo\s+123\b",
     ]
 
     if any(re.search(pattern, text) for pattern in bad_regex_patterns):
@@ -1659,6 +2784,9 @@ def is_bad_classification_source(record: Dict[str, Any]) -> bool:
         "procedimentos de avaliacao da conformidade",
         "plano de monitorização pós-comercialização",
         "plano de monitorizacao pos-comercializacao",
+        "entrada em vigor",
+        "data de aplicação",
+        "data de aplicacao",
     ]
 
     return any(pattern in text for pattern in bad_text_patterns)
@@ -1686,7 +2814,10 @@ def is_good_classification_source(record: Dict[str, Any]) -> bool:
     if re.search(r"\banexo\s+viii\b", text):
         return True
 
-    if re.search(r"\bregra\s+\d+\b", text):
+    if re.search(r"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?\d+\b", text):
+        return True
+    
+    if has_any_mdr_rule(text, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 22]):
         return True
 
     good_text_patterns = [
@@ -1769,7 +2900,82 @@ def select_chroma_retrieved_indices(
             return
         selected.append(idx)
         seen.add(k)
-        
+    
+    
+    if intent == "ai_provider_obligations":
+        ai_ranked = [
+            idx for idx in ranked
+            if is_good_ai_provider_obligations_source(records[idx])
+        ]
+
+        for wanted in [
+            "artigo 16",
+            "artigo 9",
+            "artigo 10",
+            "artigo 11",
+            "artigo 12",
+            "artigo 13",
+            "artigo 14",
+            "artigo 15",
+        ]:
+            for idx in ai_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in ai_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+
+    if intent == "ai_high_risk":
+        ai_ranked = [
+            idx for idx in ranked
+            if is_good_ai_high_risk_source(records[idx])
+        ]
+
+        for wanted in [
+            "artigo 6",
+            "anexo iii",
+            "artigo 43",
+        ]:
+            for idx in ai_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in ai_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+
+    if intent == "gspr_requirements":
+        gspr_ranked = [
+            idx for idx in ranked
+            if is_good_gspr_source(records[idx])
+            and not is_bad_gspr_source(records[idx])
+        ]
+
+        for idx in gspr_ranked:
+            t = source_text(idx)
+            if "anexo i" in t or "requisitos gerais de segurança e desempenho" in t or "requisitos gerais de seguranca e desempenho" in t:
+                add(idx)
+
+        for idx in gspr_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+    
         
     if intent == "manufacturer_obligations":
         obligations_ranked = [
@@ -1807,48 +3013,296 @@ def select_chroma_retrieved_indices(
 
         return selected[:max_items]
 
-    if intent == "classification_risk":
+    if intent == "device_qualification":
+        qual_ranked = [
+            idx for idx in ranked
+            if is_good_device_qualification_source(records[idx])
+        ]
+
+        for wanted in ["artigo 2", "considerando (19)", "software", "bem-estar", "estilo de vida"]:
+            for idx in qual_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in qual_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+
+    if intent == "clinical_evaluation_terms":
+        clinical_ranked = [
+            idx for idx in ranked
+            if is_good_clinical_evaluation_terms_source(records[idx])
+        ]
+
+        for wanted in ["artigo 2", "artigo 61", "artigo 62", "anexo xiv", "pmcf"]:
+            for idx in clinical_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in clinical_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+    
+    if intent == "pms_plan":
+        pms_ranked = [
+            idx for idx in ranked
+            if is_good_pms_plan_source(records[idx])
+        ]
+
+        for wanted in ["artigo 83", "artigo 84", "anexo iii"]:
+            for idx in pms_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in pms_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+
+    if intent == "pmcf":
+        pmcf_ranked = [
+            idx for idx in ranked
+            if is_good_pmcf_source(records[idx])
+        ]
+
+        for wanted in ["artigo 61", "anexo xiv", "pmcf", "acompanhamento"]:
+            for idx in pmcf_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in pmcf_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+
+    if intent == "classification_and_scope":
+        hybrid_ranked = [
+            idx for idx in ranked
+            if (
+                is_good_classification_source(records[idx])
+                or is_good_device_qualification_source(records[idx])
+                or is_good_regulatory_scope_source(records[idx])
+                or is_good_manufacturer_obligations_source(records[idx])
+                or is_good_gspr_source(records[idx])
+                or (
+                    plan.get("mentions_ai")
+                    and is_good_ai_high_risk_source(records[idx])
+                )
+            )
+        ]
+
+        wanted_terms = [
+            "artigo 2",
+            "artigo 51",
+            "anexo viii",
+            "artigo 5",
+            "artigo 10",
+            "anexo i",
+            "anexo ii",
+            "artigo 61",
+            "artigo 83",
+            "artigo 20",
+        ]
+
+        if plan.get("is_urinary_catheter"):
+            wanted_terms.insert(3, "regra 5")
+        elif plan.get("is_orthopedic_implant"):
+            wanted_terms.insert(3, "regra 8")
+        elif plan.get("is_cardiac_monitoring"):
+            wanted_terms.insert(3, "regra 10")
+        elif plan.get("is_thermometer"):
+            wanted_terms.insert(3, "regra 10")
+        elif plan.get("is_software"):
+            wanted_terms.insert(3, "regra 11")
+        else:
+            wanted_terms.insert(3, "regra 1")
+
+        if plan.get("mentions_ai"):
+            wanted_terms.extend(["artigo 6", "anexo iii"])
+
+        for wanted in wanted_terms:
+            for idx in hybrid_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in hybrid_ranked:
+            if len(selected) >= max_items:
+                break
+            add(idx)
+
+        return selected[:max_items]
+    
+    
+    elif intent == "classification_risk":
         classification_ranked = [
             idx for idx in ranked
             if is_good_classification_source(records[idx])
+            or (
+                plan.get("asks_hybrid_device_and_classification")
+                and is_good_device_qualification_source(records[idx])
+            )
+            or (
+                plan.get("mentions_ai")
+                and is_good_ai_high_risk_source(records[idx])
+            )
         ]
 
+        # Se também pergunta se é dispositivo médico, trazer Artigo 2 / Considerando 19.
+        if plan.get("asks_hybrid_device_and_classification"):
+            for wanted in ["artigo 2", "considerando (19)"]:
+                for idx in classification_ranked:
+                    t = source_text(idx)
+                    if wanted in t:
+                        add(idx)
+                        break
+
+        # Base legal geral da classificação MDR.
         for idx in classification_ranked:
             t = source_text(idx)
             if "artigo 51" in t or "classificação dos dispositivos" in t or "classificacao dos dispositivos" in t:
                 add(idx)
                 break
 
+        # Anexo VIII.
         for idx in classification_ranked:
             t = source_text(idx)
             if "anexo viii" in t and ("regras de classificação" in t or "regras de classificacao" in t):
                 add(idx)
                 break
 
-        for idx in classification_ranked:
-            t = source_text(idx)
-            if "regra 1" in t or "não invasivo" in t or "nao invasivo" in t:
-                add(idx)
+        # Regras por família de dispositivo.
+        if plan.get("is_urinary_catheter"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 5):
+                    add(idx)
+                    break
 
-        for idx in classification_ranked:
-            t = source_text(idx)
-            if (
-                "regra 10" in t
-                or "regra 11" in t
-                or "medição" in t
-                or "medicao" in t
-                or "temperatura" in t
-                or "termómetro" in t
-                or "termometro" in t
-                or "monitorização" in t
-                or "monitorizacao" in t
-                or "diagnóstico" in t
-                or "diagnostico" in t
-                or "software" in t
-            ):
-                add(idx)
+        elif plan.get("is_orthopedic_implant"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 8):
+                    add(idx)
+                    break
 
-        for idx in classification_ranked:
+        elif plan.get("is_cardiac_monitoring"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 10):
+                    add(idx)
+                    break
+
+        elif plan.get("is_simple_thermometer"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 1) or "não invasivo" in t or "nao invasivo" in t:
+                    add(idx)
+                    break
+
+        elif plan.get("is_active_or_digital_thermometer"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 10):
+                    add(idx)
+                    break
+
+        elif plan.get("is_software") or plan.get("mentions_ai"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 11):
+                    add(idx)
+                    break
+
+        else:
+            for rule_no in [1, 5, 8, 10, 11]:
+                for idx in classification_ranked:
+                    t = source_text(idx)
+                    if has_mdr_rule(t, rule_no):
+                        add(idx)
+                        break
+
+        # AI Act separado da classe MDR.
+        if plan.get("mentions_ai"):
+            for wanted in ["artigo 6", "anexo iii"]:
+                for idx in classification_ranked:
+                    t = source_text(idx)
+                    if records[idx].get("short_name") == "AI_ACT" and wanted in t:
+                        add(idx)
+                        break
+
+        return selected[:max_items]
+    
+    
+    if intent == "conformity_procedure":
+        conformity_ranked = []
+
+        for idx in ranked:
+            t = source_text(idx)
+            section_type = (records[idx].get("section_type") or "").lower()
+
+            # Evitar CAPÍTULO V quando existem fontes específicas.
+            if section_type == "chapter":
+                continue
+
+            if any(p in t for p in [
+                "artigo 52",
+                "avaliação da conformidade",
+                "avaliacao da conformidade",
+                "anexo ix",
+                "anexo x",
+                "anexo xi",
+                "organismo notificado",
+                "marcação ce",
+                "marcacao ce",
+                "artigo 20",
+                "declaração ue de conformidade",
+                "declaracao ue de conformidade",
+                "anexo iv",
+            ]):
+                conformity_ranked.append(idx)
+
+        for wanted in [
+            "artigo 52",
+            "anexo ix",
+            "anexo x",
+            "anexo xi",
+            "organismo notificado",
+            "artigo 20",
+            "anexo iv",
+            "declaração ue de conformidade",
+            "declaracao ue de conformidade",
+            "marcação ce",
+            "marcacao ce",
+        ]:
+            for idx in conformity_ranked:
+                t = source_text(idx)
+                if wanted in t:
+                    add(idx)
+                    break
+
+        for idx in conformity_ranked:
             if len(selected) >= max_items:
                 break
             add(idx)
@@ -1977,6 +3431,10 @@ def select_chroma_retrieved_indices(
 def search_question(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """
     Executa apenas a fase de pesquisa semântica.
+
+    Regra importante:
+    - O intent/plano é sempre calculado pela pergunta atual.
+    - O histórico só entra no retrieval se a pergunta for follow-up explícita.
     """
     if not OLLAMA_EMBED_MODEL:
         raise ValueError("Falta OLLAMA_EMBED_MODEL no .env")
@@ -1985,8 +3443,17 @@ def search_question(question: str, history: Optional[List[Dict[str, str]]] = Non
     if not question_clean:
         raise ValueError("A pergunta não pode estar vazia.")
 
-    retrieval_question = build_contextual_question(question_clean, history) if history else question_clean
-    plan = analyze_question(retrieval_question)
+    is_follow_up = is_explicit_follow_up_question(question_clean)
+
+    # O plano tem de ser SEMPRE calculado pela pergunta atual,
+    # para evitar contaminação pelo histórico.
+    plan = analyze_question(question_clean)
+
+    retrieval_question = (
+        build_contextual_question(question_clean, history)
+        if is_follow_up and history
+        else question_clean
+    )
 
     if VECTOR_STORE == "chroma" and chroma_has_documents():
         records, base_scores, adjusted_scores, selected_indices = query_chroma_with_variants(
@@ -1995,12 +3462,33 @@ def search_question(question: str, history: Optional[List[Dict[str, str]]] = Non
             n_results_per_query=10,
         )
 
-        if plan.get("intent") in {"manufacturer_obligations", "classification_risk", "documentation", "document_generation"}:
+        if plan.get("intent") in {
+            "manufacturer_obligations",
+            "classification_risk",
+            "documentation",
+            "document_generation",
+            "ai_provider_obligations",
+            "ai_high_risk",
+            "gspr_requirements",
+            "conformity_procedure",
+            "device_qualification",
+            "clinical_evaluation_terms",
+            "classification_and_scope",
+            "pms_plan",
+            "pmcf",
+        }:
+            retrieval_max_items = 18
+
+            if plan.get("intent") == "classification_risk":
+                retrieval_max_items = 10
+            elif plan.get("intent") == "classification_and_scope":
+                retrieval_max_items = 14
+
             selected_indices = select_chroma_retrieved_indices(
                 records=records,
                 adjusted_scores=adjusted_scores,
                 plan=plan,
-                max_items=18,
+                max_items=retrieval_max_items,
             )
         else:
             selected_indices = select_relevant_indices(
@@ -2019,7 +3507,7 @@ def search_question(question: str, history: Optional[List[Dict[str, str]]] = Non
     all_records = payload["records"]
     embeddings = payload["embeddings"]
 
-    selected_indices, base_scores, adjusted_scores, plan = retrieve_relevant_indices(
+    selected_indices, base_scores, adjusted_scores, _retrieval_plan = retrieve_relevant_indices(
         question=retrieval_question,
         records=all_records,
         embeddings=embeddings,
@@ -2033,6 +3521,511 @@ def search_question(question: str, history: Optional[List[Dict[str, str]]] = Non
     }
 
 
+def source_text_for_indices(
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+) -> str:
+    return " ".join(
+        str(records[idx].get("chunk_text", "") or "").lower()
+        for idx in generation_indices
+    )
+
+
+def citation_for_matching_text(
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+    patterns: List[str],
+) -> Optional[str]:
+    for idx in generation_indices:
+        r = records[idx]
+        text = " ".join([
+            str(r.get("citation_label", "")),
+            str(r.get("section_number", "")),
+            str(r.get("section_title", "")),
+            str(r.get("chunk_text", "")),
+        ]).lower()
+
+        if any(p.lower() in text for p in patterns):
+            citation = str(r.get("citation_label", "") or "").strip()
+            if citation:
+                return citation
+
+    return None
+
+
+def source_contains_rule(
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+    rule_number: int,
+) -> bool:
+    pattern = rf"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?{rule_number}\b"
+    text = source_text_for_indices(generation_indices, records)
+    return re.search(pattern, text, flags=re.IGNORECASE) is not None
+
+
+def build_canonical_classification_answer(
+    *,
+    question: str,
+    plan: Dict[str, Any],
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+) -> Optional[str]:
+    if plan.get("intent") != "classification_risk":
+        return None
+
+    q = (question or "").lower()
+    fixed = build_fixed_regulations_section(plan)
+
+    def cite(c: Optional[str]) -> str:
+        return f" [{c}]" if c else ""
+
+    def citations_block(citations: List[Optional[str]]) -> List[str]:
+        used = [c for c in dict.fromkeys(citations) if c]
+        if not used:
+            return []
+        return ["", "4. Citações usadas", *[f"- {c}" for c in used]]
+
+    art2 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 2", "definições", "dispositivo médico", "dispositivo medico"],
+    )
+    art51 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 51", "classificação dos dispositivos", "classificacao dos dispositivos"],
+    )
+    annex8 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["anexo viii", "regras de classificação", "regras de classificacao"],
+    )
+    rule1 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 1", "regra n.º 1", "regra 1", "todos os dispositivos não invasivos", "todos os dispositivos nao invasivos"],
+    )
+    rule5 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 5", "regra n.º 5", "regra 5", "orifícios corporais", "orificios corporais"],
+    )
+    rule8 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 8", "regra n.º 8", "regra 8", "dispositivos implantáveis", "dispositivos implantaveis"],
+    )
+    rule10 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 10", "regra n.º 10", "regra 10", "ritmo cardíaco", "ritmo cardiaco", "processos fisiológicos vitais"],
+    )
+    rule11 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 11", "regra n.º 11", "regra 11", "software destinado a prestar informações"],
+    )
+    ai6 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 6", "risco elevado", "alto risco"],
+    )
+
+    is_urinary_catheter = any(x in q for x in [
+        "cateter urinário", "cateter urinario", "cateter uretral", "cateter vesical",
+        "sonda urinária", "sonda urinaria", "sonda vesical",
+    ])
+
+    is_orthopedic_implant = any(x in q for x in [
+        "implante ortopédico", "implante ortopedico", "ortopédico", "ortopedico",
+        "prótese", "protese", "implante permanente",
+    ])
+
+    is_cardiac_monitoring = any(x in q for x in [
+        "ritmo cardíaco", "ritmo cardiaco", "frequência cardíaca", "frequencia cardiaca",
+        "ecg", "arritmia", "arritmias", "fibrilhação", "fibrilhacao",
+        "fibrilação", "fibrilacao",
+    ])
+
+    is_high_acuity = any(x in q for x in [
+        "perigo imediato", "perigosa", "perigosas", "alerta", "alertas",
+        "urgente", "crítico", "critico",
+    ])
+
+    is_thermometer = any(x in q for x in ["termómetro", "termometro", "temperatura"])
+    is_active_or_digital_thermometer = is_thermometer and any(x in q for x in [
+        "digital", "eletrónico", "eletronico", "electrónico", "electronico",
+        "ativo", "activa", "ativa", "infravermelhos", "infra-vermelhos",
+        "sensor", "algoritmo", "software", "ia", "inteligência artificial",
+        "inteligencia artificial", "machine learning",
+    ])
+
+    is_simple_thermometer = is_thermometer and not is_active_or_digital_thermometer
+
+    is_software_diagnosis = (
+        "software" in q
+        and any(x in q for x in [
+            "diagnóstico", "diagnostico", "radiografia", "radiografias",
+            "pneumonia", "tac", "avc", "triagem", "prioriza", "priorização", "priorizacao",
+        ])
+    )
+
+    is_ai_stroke_triage = (
+        is_software_diagnosis
+        and any(x in q for x in ["ia", "ai", "inteligência artificial", "inteligencia artificial"])
+        and any(x in q for x in ["tac", "avc", "urgente", "radiologista", "prioriza", "priorização", "priorizacao"])
+    )
+
+    if is_urinary_catheter and rule5:
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: Classe I, se for um cateter urinário invasivo em relação a orifício corporal e de utilização temporária. {cite(rule5)}",
+            "- Se a utilização prevista for a curto prazo, a classe provável passa para Classe IIa; se for a longo prazo, pode passar para Classe IIb, salvo exceções específicas.",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Duração de utilização prevista: temporária, curto prazo ou longo prazo.",
+            "- Se é ligado a um dispositivo ativo.",
+            "- Finalidade prevista e população/utilizadores.",
+            *citations_block([art51, annex8, rule5]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_orthopedic_implant and rule8:
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: Classe IIb, se for um implante ortopédico permanente sem medicamento incorporado e sem exceção que o faça subir de classe. {cite(rule8)}",
+            "- Pode passar para Classe III se for, por exemplo, prótese articular total/parcial, implante em contacto com coração/sistema circulatório central/sistema nervoso central, dispositivo com efeito biológico, absorvível, destinado a administrar medicamentos, implante ativo, ou certos implantes de coluna/disco intervertebral.",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Tipo exato de implante ortopédico.",
+            "- Se é prótese articular total/parcial ou componente auxiliar.",
+            "- Local anatómico e contacto com estruturas críticas.",
+            "- Existência de medicamento, efeito biológico, absorção ou transformação química.",
+            *citations_block([art51, annex8, rule8]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_cardiac_monitoring and rule10:
+        classe = "Classe IIb" if is_high_acuity else "Classe IIa ou IIb"
+        motivo = (
+            "porque a pergunta indica monitorização/alerta de arritmias perigosas, ou seja, variações de parâmetro fisiológico vital que podem representar perigo imediato para o doente."
+            if is_high_acuity
+            else "porque a Regra 10 distingue dispositivos ativos de diagnóstico/monitorização e pode subir para IIb quando a natureza das variações monitorizadas puder resultar em perigo imediato para o doente."
+        )
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: {classe}, {motivo} {cite(rule10)}",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Se o alerta é usado para decisão clínica urgente.",
+            "- Se a arritmia detetada representa perigo imediato para o doente.",
+            "- Se o dispositivo apenas regista dados ou se emite alertas/decisões clínicas.",
+            *citations_block([art51, annex8, rule10]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_simple_thermometer and rule1:
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: Classe I, se for um termómetro simples não invasivo, sem componente ativa/digital/software/IA relevante para diagnóstico ou monitorização ativa. {cite(rule1)}",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Se é realmente simples/não invasivo.",
+            "- Se não tem software, algoritmo, IA, infravermelhos ou função ativa de diagnóstico/monitorização.",
+            "- Finalidade prevista pelo fabricante.",
+            *citations_block([art51, annex8, rule1]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_active_or_digital_thermometer and rule10:
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: Classe IIa, se o termómetro digital/ativo/infravermelhos se destinar a diagnóstico ou monitorização clínica da temperatura corporal. {cite(rule10)}",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "- A conclusão depende da finalidade prevista, do modo como a temperatura é usada e do impacto clínico da informação.",
+            "",
+            "3. Condições a confirmar",
+            "- Se é usado para diagnóstico ou monitorização clínica.",
+            "- Se tem software/algoritmo/IA autónomo que presta informação para decisões clínicas.",
+            "- Se existem alertas ou decisões clínicas automatizadas.",
+            *citations_block([art51, annex8, rule10]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_ai_stroke_triage and rule11:
+        body = [
+            "2. Enquadramento MDR e AI Act",
+            f"- O software pode qualificar-se como dispositivo médico se a finalidade prevista for apoiar diagnóstico, triagem ou priorização clínica. {cite(art2)}",
+            f"- Classe MDR provável: Classe IIb se a priorização de TAC suspeita de AVC influenciar a urgência da revisão e um erro puder causar deterioração grave do estado de saúde; se for apenas apoio sem impacto clínico grave, o ponto de partida pode ser Classe IIa. {cite(rule11)}",
+            f"- A classificação MDR deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            f"- Quanto ao AI Act, pode ser sistema de IA de risco elevado se cumprir o enquadramento do Artigo 6, nomeadamente se for sistema de IA usado como produto/componente abrangido por legislação harmonizada e sujeito a avaliação de conformidade por terceiros. {cite(ai6)}" if ai6 else "- Quanto ao AI Act, a categoria deve ser analisada separadamente; a classe MDR não é a mesma coisa que risco elevado no AI Act.",
+            "",
+            "3. Condições a confirmar",
+            "- Se a priorização altera tempos de revisão ou decisão clínica.",
+            "- Se o erro pode atrasar tratamento de AVC ou causar deterioração grave.",
+            "- Se o software é parte de dispositivo médico ou software médico autónomo.",
+            "- Se está sujeito a avaliação de conformidade por terceiro.",
+            *citations_block([art2, art51, annex8, rule11, ai6]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_software_diagnosis and rule11:
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: Classe IIa, porque o software presta informações utilizadas para decisões com fins de diagnóstico. {cite(rule11)}",
+            "- Pode subir para Classe IIb ou Classe III se a decisão suportada puder causar deterioração grave, intervenção cirúrgica, morte ou deterioração irreversível; esses elementos têm de ser confirmados.",
+            f"- A classificação MDR deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Finalidade prevista pelo fabricante.",
+            "- Se o software apenas apoia ou se influencia diretamente a decisão clínica.",
+            "- Gravidade do impacto clínico caso a informação esteja errada.",
+            *citations_block([art51, annex8, rule11, ai6]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    return None
+
+
+def build_canonical_device_qualification_answer(
+    *,
+    question: str,
+    plan: Dict[str, Any],
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+) -> Optional[str]:
+    if plan.get("intent") != "device_qualification":
+        return None
+
+    q = (question or "").lower()
+    fixed = build_fixed_regulations_section(plan)
+
+    def cite(c: Optional[str]) -> str:
+        return f" [{c}]" if c else ""
+
+    art2 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 2", "definições", "dispositivo médico", "dispositivo medico"],
+    )
+    recital19 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["considerando (19)", "bem-estar", "estilo de vida", "software de uso geral"],
+    )
+
+    is_hydration_app = (
+        ("hidratação" in q or "hidratacao" in q)
+        and ("app" in q or "aplicação" in q or "aplicacao" in q)
+        and ("sem finalidade médica" in q or "sem finalidade medica" in q or "apenas" in q)
+    )
+
+    is_smartwatch = "smartwatch" in q
+    is_fitness_only = is_smartwatch and any(x in q for x in ["fitness", "passos", "sono", "bem-estar", "wellness"])
+    is_afib_detection = is_smartwatch and any(x in q for x in [
+        "fibrilhação", "fibrilhacao", "fibrilação", "fibrilacao", "arritmia", "arritmias"
+    ])
+
+    citations = [c for c in dict.fromkeys([art2, recital19]) if c]
+
+    if is_hydration_app:
+        body = [
+            "2. Enquadramento MDR",
+            f"- Em princípio, uma app que apenas recomenda hidratação geral e não tem finalidade médica prevista não é dispositivo médico MDR. {cite(recital19 or art2)}",
+            "- Nesse cenário, não há obrigação de avaliação clínica ou PMCF/ACPC ao abrigo do MDR, porque essas obrigações pressupõem que o produto seja um dispositivo médico.",
+            "- A conclusão muda se o fabricante fizer claims médicos, por exemplo diagnóstico, prevenção, monitorização ou tratamento de doença/desidratação.",
+            "",
+            "3. Condições a confirmar",
+            "- Claims comerciais e instruções de utilização.",
+            "- Se a app se destina apenas a bem-estar ou a uma finalidade médica específica.",
+            "- Se recomenda hidratação geral ou se gere/monitoriza uma condição clínica.",
+            "",
+            "4. Citações usadas",
+            *[f"- {c}" for c in citations],
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_afib_detection:
+        body = [
+            "2. Enquadramento MDR",
+            f"- Sim, muda o enquadramento: se o smartwatch for anunciado para deteção de fibrilhação auricular/arritmias, deixa de ser apenas fitness/bem-estar e passa a ter finalidade médica específica, como diagnóstico ou monitorização. {cite(art2)}",
+            "- A classe MDR concreta deve depois ser avaliada pelas regras de classificação aplicáveis, em especial dispositivos ativos de diagnóstico/monitorização ou software, conforme a arquitetura do produto.",
+            "",
+            "3. Condições a confirmar",
+            "- Se a funcionalidade é apenas informativa ou se apoia decisão clínica.",
+            "- Se há alerta para o utilizador/profissional de saúde.",
+            "- Se o algoritmo/software presta informação usada para diagnóstico.",
+            "- Finalidade prevista e claims comerciais do fabricante.",
+            "",
+            "4. Citações usadas",
+            *[f"- {c}" for c in citations],
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if is_fitness_only:
+        body = [
+            "2. Enquadramento MDR",
+            f"- Em princípio, não é dispositivo médico se o smartwatch for anunciado apenas para fitness, passos, sono, frequência cardíaca geral ou bem-estar, sem finalidade médica específica. {cite(recital19 or art2)}",
+            "- O enquadramento muda se o fabricante fizer claims médicos, por exemplo diagnóstico, monitorização de doença, deteção de arritmias ou apoio a decisão clínica.",
+            "",
+            "3. Citações usadas",
+            *[f"- {c}" for c in citations],
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    return None
+
+
+
+def build_canonical_classification_and_scope_answer(
+    *,
+    question: str,
+    plan: Dict[str, Any],
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+) -> Optional[str]:
+    q = (question or "").lower()
+
+    if plan.get("intent") != "classification_and_scope":
+        return None
+
+    def cite(c: Optional[str]) -> str:
+        return f" [{c}]" if c else ""
+
+    art2 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 2", "definições", "dispositivo médico", "dispositivo medico"],
+    )
+    art51 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 51", "classificação dos dispositivos", "classificacao dos dispositivos"],
+    )
+    annex8 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["anexo viii", "regras de classificação", "regras de classificacao"],
+    )
+    rule10 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 10", "regra n.º 10", "regra 10", "processos fisiológicos vitais", "diagnóstico direto", "monitorização"],
+    )
+    rule11 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 11", "regra n.º 11", "regra 11", "software destinado a prestar informações"],
+    )
+    ai6 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 6", "risco elevado", "alto risco"],
+    )
+
+    fixed = build_fixed_regulations_section(plan)
+
+    is_thermometer = any(x in q for x in ["termómetro", "termometro", "temperatura"])
+    is_active_or_digital_thermometer = is_thermometer and any(x in q for x in [
+        "digital", "eletrónico", "eletronico", "electrónico", "electronico",
+        "ativo", "ativa", "infravermelhos", "infra-vermelhos",
+        "sensor", "algoritmo", "software", "ia", "inteligência artificial",
+        "inteligencia artificial", "machine learning",
+    ])
+
+    is_ai_triage_software = (
+        ("software" in q or "ia" in q or "ai" in q)
+        and any(x in q for x in [
+            "tac", "avc", "radiologista", "radiologistas",
+            "prioriza", "priorizar", "triagem", "urgente",
+        ])
+    )
+
+    if is_active_or_digital_thermometer:
+        citations_used = [c for c in [art2, art51, annex8, rule10, ai6] if c]
+
+        body = [
+            "2. Qualificação como dispositivo médico",
+            f"- Pode enquadrar-se como dispositivo médico se a finalidade prevista for diagnóstico ou monitorização clínica da temperatura corporal.{cite(art2)}",
+            "- Se a finalidade for apenas bem-estar, uso geral ou informação não médica, a qualificação pode mudar.",
+            "",
+            "3. Classe MDR provável",
+            f"- Classe provável: Classe IIa, se o termómetro digital/ativo/infravermelhos se destinar a diagnóstico ou monitorização clínica.{cite(rule10 or annex8)}",
+            f"- A classificação MDR deve ser feita pelas regras do Anexo VIII.{cite(art51 or annex8)}",
+            "- A classe pode mudar se o produto for apenas um termómetro simples não invasivo sem componente ativa/software/IA relevante, ou se a finalidade prevista não for médica.",
+            "",
+            "4. AI Act",
+        ]
+
+        if plan.get("mentions_ai"):
+            if ai6:
+                body.append(
+                    f"- A componente de IA deve ser analisada separadamente no AI Act. Pode ser sistema de IA de risco elevado se preencher as condições do Artigo 6.{cite(ai6)}"
+                )
+            else:
+                body.append(
+                    "- A componente de IA deve ser analisada separadamente no AI Act; isto não deve ser confundido com a classe MDR."
+                )
+
+        body.extend([
+            "",
+            "5. Condições a confirmar",
+            "- Finalidade prevista pelo fabricante.",
+            "- Se é usado para diagnóstico ou monitorização clínica.",
+            "- Se o algoritmo/IA presta informação usada em decisão clínica.",
+            "- Se existem alertas, recomendações ou decisões automatizadas.",
+            "",
+            "6. Citações usadas",
+            *[f"- {c}" for c in dict.fromkeys(citations_used)],
+        ])
+
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+    if not is_ai_triage_software:
+        return None
+
+    citations_used = [c for c in [art2, art51, annex8, rule11, ai6] if c]
+
+    body = [
+        "2. Qualificação como dispositivo médico",
+        f"- Pode enquadrar-se como dispositivo médico se a finalidade prevista for apoiar diagnóstico, triagem ou monitorização clínica.{cite(art2)}",
+        "",
+        "3. Classe MDR provável",
+        f"- Classe provável: Classe IIa, porque o software presta informações utilizadas para decisões com fins de diagnóstico ou terapêuticos.{cite(rule11 or annex8)}",
+        "- Pode subir para Classe IIb ou Classe III se a decisão suportada puder causar deterioração grave, intervenção cirúrgica, morte ou deterioração irreversível; isto depende da finalidade prevista e do impacto clínico.",
+        f"- A classificação MDR deve ser feita pelas regras do Anexo VIII.{cite(art51 or annex8)}",
+        "",
+        "4. AI Act",
+    ]
+
+    if ai6:
+        body.append(
+            f"- A componente de IA deve ser analisada separadamente no AI Act. Pode ser sistema de IA de risco elevado se preencher as condições do Artigo 6, nomeadamente por estar ligado a produto regulado/componente de segurança sujeito a avaliação da conformidade.{cite(ai6)}"
+        )
+    else:
+        body.append(
+            "- A componente de IA deve ser analisada separadamente no AI Act; isto não deve ser confundido com a classe MDR."
+        )
+
+    body.extend([
+        "",
+        "5. Condições a confirmar",
+        "- Finalidade prevista exata: triagem, priorização, diagnóstico ou apoio à decisão.",
+        "- Se o software apenas ordena exames ou se influencia diretamente a decisão clínica.",
+        "- Gravidade do impacto se o software falhar ou atrasar a revisão.",
+        "- Integração com fluxo clínico e responsabilidade do profissional de saúde.",
+        "",
+        "6. Citações usadas",
+        *[f"- {c}" for c in dict.fromkeys(citations_used)],
+    ])
+
+    return f"{fixed}\n\n" + "\n".join(body).strip()
+
+
 def answer_question(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     if not OLLAMA_CHAT_MODEL:
         raise ValueError("Falta OLLAMA_CHAT_MODEL no .env")
@@ -2041,36 +4034,38 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
     if not question_clean:
         raise ValueError("A pergunta não pode estar vazia.")
 
-    is_follow_up = (
-        len(question_clean) < 120
-        or any(
-            expr in question_clean.lower()
-            for expr in [
-                "e agora",
-                "agora",
-                "isso",
-                "esse",
-                "essa",
-                "este",
-                "esta",
-                "o mesmo",
-                "faz o documento",
-                "gera o pmcf",
-                "faz agora o documento pmcf",
-            ]
-        )
-    )
+    is_follow_up = is_explicit_follow_up_question(question_clean)
+
+    # O plano tem de ser SEMPRE calculado pela pergunta atual.
+    # Nunca calcular o plano a partir da pergunta com histórico.
+    plan = analyze_question(question_clean)
 
     retrieval_question = (
         build_contextual_question(question_clean, history)
-        if is_follow_up
+        if is_follow_up and history
         else question_clean
     )
 
-    plan = analyze_question(retrieval_question)
-
     if VECTOR_STORE == "chroma" and chroma_has_documents():
-        n_results = 25 if plan.get("intent") in {"manufacturer_obligations", "classification_risk", "documentation", "document_generation"} else 12
+        n_results = 25 if plan.get("intent") in {
+            "manufacturer_obligations",
+            "classification_risk",
+            "documentation",
+            "document_generation",
+            "ai_provider_obligations",
+            "ai_high_risk",
+            "gspr_requirements",
+            "conformity_procedure",
+            "device_qualification",
+            "clinical_evaluation_terms",
+            "classification_and_scope",
+            "pms_plan",
+            "pmcf",
+            "ai_human_oversight",
+            "ai_high_risk_requirements",
+            "pmcf_plan",
+            "pms_pmcf_vigilance",
+        } else 12
 
         records, base_scores, adjusted_scores, _ = query_chroma_with_variants(
             retrieval_question,
@@ -2081,20 +4076,27 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
         if not records:
             raise ValueError("Não foi possível recuperar contexto relevante.")
 
+        retrieval_max_items = 18
+
+        if plan.get("intent") == "classification_risk":
+            retrieval_max_items = 10
+        elif plan.get("intent") == "classification_and_scope":
+            retrieval_max_items = 14
+
         selected_indices = select_chroma_retrieved_indices(
             records=records,
             adjusted_scores=adjusted_scores,
             plan=plan,
-            max_items=18,
+            max_items=retrieval_max_items,
         )
         retrieval_backend = "chroma"
-        
+
     else:
         payload = validate_embeddings_payload(str(EMBEDDINGS_PATH))
         records = payload["records"]
         embeddings = payload["embeddings"]
 
-        selected_indices, base_scores, adjusted_scores, plan = retrieve_relevant_indices(
+        selected_indices, base_scores, adjusted_scores, _retrieval_plan = retrieve_relevant_indices(
             question=retrieval_question,
             records=records,
             embeddings=embeddings,
@@ -2114,6 +4116,89 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
 
     if not generation_indices:
         raise ValueError("Não foi possível selecionar fontes para gerar a resposta.")
+    
+    
+    canonical_classification_scope_answer = build_canonical_classification_and_scope_answer(
+        question=question_clean,
+        plan=plan,
+        generation_indices=generation_indices,
+        records=records,
+    )
+
+    if canonical_classification_scope_answer:
+        return {
+            "intent": plan["intent"],
+            "target_docs": plan["target_docs"],
+            "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
+            "generation_sources": records_preview(
+                cited_generation_indices(canonical_classification_scope_answer, generation_indices, records),
+                records,
+                adjusted_scores,
+            ),
+            "answer": canonical_classification_scope_answer,
+            "retrieval_backend": retrieval_backend,
+        }
+    
+    canonical_classification_answer = build_canonical_classification_answer(
+        question=question_clean,
+        plan=plan,
+        generation_indices=generation_indices,
+        records=records,
+    )
+    
+    if canonical_classification_answer:
+        return {
+            "intent": plan["intent"],
+            "target_docs": plan["target_docs"],
+            "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
+            "generation_sources": records_preview(
+                cited_generation_indices(canonical_classification_answer, generation_indices, records),
+                records,
+                adjusted_scores,
+            ),
+            "answer": canonical_classification_answer,
+            "retrieval_backend": retrieval_backend,
+        }
+        
+    canonical_device_answer = build_canonical_device_qualification_answer(
+        question=question_clean,
+        plan=plan,
+        generation_indices=generation_indices,
+        records=records,
+    )
+
+    if canonical_device_answer:
+        return {
+            "intent": plan["intent"],
+            "target_docs": plan["target_docs"],
+            "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
+            "generation_sources": records_preview(generation_indices, records, adjusted_scores),
+            "answer": canonical_device_answer,
+            "retrieval_backend": retrieval_backend,
+        }
+        
+    
+    canonical_manufacturer_answer = build_canonical_manufacturer_obligations_answer(
+        question=question_clean,
+        plan=plan,
+        generation_indices=generation_indices,
+        records=records,
+    )
+
+    if canonical_manufacturer_answer:
+        return {
+            "intent": plan["intent"],
+            "target_docs": plan["target_docs"],
+            "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
+            "generation_sources": records_preview(
+                cited_generation_indices(canonical_manufacturer_answer, generation_indices, records),
+                records,
+                adjusted_scores,
+            ),
+            "answer": canonical_manufacturer_answer,
+            "retrieval_backend": retrieval_backend,
+        }
+        
 
     if not has_minimum_retrieval_confidence(selected_indices, adjusted_scores):
         final_answer = build_low_confidence_answer(
@@ -2133,12 +4218,15 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
 
     context = build_context(generation_indices, records)
     system_prompt = get_system_prompt(plan["intent"])
+
+    # Só passar histórico ao prompt se for follow-up explícita.
+    # Isto evita o modelo responder sobre AI Act ou fabricante por causa de mensagens anteriores.
     prompt = build_user_prompt(
-        question,
+        question_clean,
         context,
         plan["intent"],
         plan,
-        history=history,
+        history=history if is_follow_up else None,
     )
 
     response = ollama.chat(
@@ -2152,13 +4240,26 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
 
     fixed_regulations_section = build_fixed_regulations_section(plan)
     generated_text = sanitize_generated_answer(response["message"]["content"])
+
+    generated_text = improve_answer_if_needed(
+        question=question_clean,
+        answer=generated_text,
+        generation_indices=generation_indices,
+        records=records,
+        plan=plan,
+    )
+
     final_answer = f"{fixed_regulations_section}\n\n{generated_text}".strip()
 
     return {
         "intent": plan["intent"],
         "target_docs": plan["target_docs"],
         "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
-        "generation_sources": records_preview(generation_indices, records, adjusted_scores),
+        "generation_sources": records_preview(
+            cited_generation_indices(final_answer, generation_indices, records),
+            records,
+            adjusted_scores,
+        ),
         "answer": final_answer,
         "retrieval_backend": retrieval_backend,
     }
