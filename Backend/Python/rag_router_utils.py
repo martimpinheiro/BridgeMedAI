@@ -79,6 +79,23 @@ MEDICAL_DEVICE_TERMS = {
     "fibrilacao auricular", "fibrilação auricular", "arritmia", "arritmias",
     "tac", "avc", "radiologista", "triagem", "priorizacao", "priorização",
     
+    # pensos / compressas / feridas
+    "compressa", "compressa esteril", "compressa estéril",
+    "penso", "penso esteril", "penso estéril",
+    "curativo", "ferida", "feridas", "ferida superficial",
+    "feridas superficiais", "exsudado", "exsudados",
+
+    # administração / perfusão
+    "perfusao", "perfusão", "infusao", "infusão",
+    "bomba de infusao", "bomba de infusão",
+    "administra medicacao", "administra medicação",
+    "administrar medicacao", "administrar medicação",
+    "administrar medicamento", "administração de medicamentos",
+
+    # dose terapêutica / diabetes
+    "insulina", "glicemia", "dose de insulina",
+    "dosagem de insulina", "calcula dose",
+    
 }
 
 # Termos associados a IA / machine learning.
@@ -732,6 +749,53 @@ def detect_device_profile(question: str) -> Dict[str, Any]:
         "radiologista", "radiologistas",
         "revisão urgente", "revisao urgente",
     ])
+    
+    is_wound_dressing = any(term in q for term in [
+        "compressa",
+        "penso",
+        "curativo",
+        "ferida",
+        "feridas",
+        "ferida superficial",
+        "feridas superficiais",
+        "exsudado",
+        "exsudados",
+        "barreira",
+        "pele lesada",
+        "membrana mucosa lesada",
+    ])
+
+    is_superficial_wound_dressing = is_wound_dressing and any(term in q for term in [
+        "superficial",
+        "superficiais",
+        "ferida superficial",
+        "feridas superficiais",
+    ])
+
+    is_drug_administration = any(term in q for term in [
+        "perfusao",
+        "perfusão",
+        "infusao",
+        "infusão",
+        "bomba de infusao",
+        "bomba de infusão",
+        "administra medicacao",
+        "administra medicação",
+        "administrar medicacao",
+        "administrar medicação",
+        "administra medicamento",
+        "administrar medicamento",
+        "administração de medicamento",
+        "administracao de medicamento",
+        "administração de medicamentos",
+        "administracao de medicamentos",
+    ])
+
+    is_insulin_dose_software = (
+        is_software
+        and any(term in q for term in ["insulina", "glicemia", "diabetes"])
+        and any(term in q for term in ["dose", "dosagem", "calcula", "calcular", "recomenda", "recomendacao", "recomendação"])
+    )
 
     return {
         "is_medical_device": is_medical_device,
@@ -748,6 +812,10 @@ def detect_device_profile(question: str) -> Dict[str, Any]:
         "is_high_acuity_cardiac_monitoring": is_high_acuity_cardiac_monitoring,
         "is_wellness_fitness": is_wellness_fitness,
         "is_clinical_prioritization_software": is_clinical_prioritization_software,
+        "is_wound_dressing": is_wound_dressing,
+        "is_superficial_wound_dressing": is_superficial_wound_dressing,
+        "is_drug_administration": is_drug_administration,
+        "is_insulin_dose_software": is_insulin_dose_software,
     }
 
 
@@ -1349,7 +1417,7 @@ def build_query_variants(question: str, plan: Dict[str, Any]) -> List[str]:
     
     
     elif intent == "classification_risk":
-        queries.append("MDR artigo 51 anexo VIII regras de classificação classe risco dispositivo médico")
+        queries.append("MDR artigo 51 anexo VIII regras de classificação classe risco regra 1 regra 4 regra 5 regra 8 regra 10 regra 11 regra 12 dispositivo médico")
         queries.append("MDR anexo VIII regra 1 dispositivos não invasivos classe I")
         queries.append("MDR anexo VIII regra 10 dispositivos ativos diagnóstico monitorização processos fisiológicos vitais")
         queries.append("MDR anexo VIII regra 11 software diagnóstico terapêutico classe IIa IIb III")
@@ -1377,6 +1445,18 @@ def build_query_variants(question: str, plan: Dict[str, Any]) -> List[str]:
         if plan.get("is_software"):
             queries.append("MDR anexo VIII regra 11 software decisões diagnóstico terapêutico classe IIa IIb III")
             queries.append("MDR software destinado a prestar informações utilizadas para decisões com fins terapêuticos ou de diagnóstico regra 11")
+            
+        if plan.get("is_wound_dressing"):
+            queries.append("MDR anexo VIII regra 4 dispositivos não invasivos contacto com pele lesada membrana mucosa lesada feridas exsudados classe I IIa IIb")
+            queries.append("MDR compressa estéril penso feridas superficiais regra 4 barreira mecânica compressão absorção de exsudados classe I")
+
+        if plan.get("is_drug_administration"):
+            queries.append("MDR anexo VIII regra 12 dispositivos ativos administrar medicamentos fluidos corporais outras substâncias classe IIa IIb")
+            queries.append("MDR dispositivo ativo perfusão administração automática medicação regra 12 potencialmente perigosa classe IIb")
+
+        if plan.get("is_insulin_dose_software"):
+            queries.append("MDR anexo VIII regra 11 software decisões terapêuticas dose insulina glicemia deterioração grave classe IIb morte deterioração irreversível classe III")
+            queries.append("MDR software calcula dose recomendada de insulina regra 11 decisão terapêutica classe IIb classe III")
 
         if plan.get("mentions_ai"):
             queries.append("AI Act artigo 6 anexo III sistema de IA de alto risco dispositivo médico")
@@ -1844,6 +1924,16 @@ def intent_pattern_bonus(plan: Dict[str, Any], record: Dict[str, Any]) -> float:
                     bonus -= 0.15
                 else:
                     bonus += 0.22
+                    
+            if re.search(r"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?4\b", text):
+                bonus += 0.70 if plan.get("is_wound_dressing") else 0.12
+
+            if re.search(r"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?12\b", text):
+                bonus += 0.75 if plan.get("is_drug_administration") else 0.12
+
+            if re.search(r"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?11\b", text):
+                if plan.get("is_insulin_dose_software"):
+                    bonus += 0.85
 
             if re.search(r"\bregra\s+(?:n\.?\s*[ºo°]?\s*)?1\b", text):
                 if plan.get("is_simple_thermometer"):

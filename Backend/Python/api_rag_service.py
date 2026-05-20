@@ -1825,6 +1825,24 @@ def select_generation_indices(
                 lambda r, text: has_mdr_rule(text, 10),
             ])
 
+        elif plan.get("is_wound_dressing"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 4),
+            ])
+
+        elif plan.get("is_drug_administration"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 12),
+            ])
+
+        elif plan.get("is_insulin_dose_software"):
+            add_best_match([
+                lambda r, text: r.get("short_name") == "MDR",
+                lambda r, text: has_mdr_rule(text, 11),
+            ])
+        
         elif plan.get("is_simple_thermometer"):
             add_best_match([
                 lambda r, text: r.get("short_name") == "MDR",
@@ -1844,7 +1862,7 @@ def select_generation_indices(
             ])
 
         else:
-            for rule_no in [1, 5, 8, 10, 11]:
+            for rule_no in [1, 4, 5, 8, 10, 11, 12]:
                 add_best_match([
                     lambda r, text: r.get("short_name") == "MDR",
                     lambda r, text, rule_no=rule_no: has_mdr_rule(text, rule_no),
@@ -3213,7 +3231,28 @@ def select_chroma_retrieved_indices(
                 if has_mdr_rule(t, 10):
                     add(idx)
                     break
+        
+        elif plan.get("is_wound_dressing"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 4):
+                    add(idx)
+                    break
 
+        elif plan.get("is_drug_administration"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 12):
+                    add(idx)
+                    break
+
+        elif plan.get("is_insulin_dose_software"):
+            for idx in classification_ranked:
+                t = source_text(idx)
+                if has_mdr_rule(t, 11):
+                    add(idx)
+                    break
+        
         elif plan.get("is_simple_thermometer"):
             for idx in classification_ranked:
                 t = source_text(idx)
@@ -3236,7 +3275,7 @@ def select_chroma_retrieved_indices(
                     break
 
         else:
-            for rule_no in [1, 5, 8, 10, 11]:
+            for rule_no in [1, 4, 5, 8, 10, 11, 12]:
                 for idx in classification_ranked:
                     t = source_text(idx)
                     if has_mdr_rule(t, rule_no):
@@ -3605,6 +3644,11 @@ def build_canonical_classification_answer(
         records,
         ["regra n.o 1", "regra n.º 1", "regra 1", "todos os dispositivos não invasivos", "todos os dispositivos nao invasivos"],
     )
+    rule4 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 4", "regra n.º 4", "regra 4", "pele lesada", "membrana mucosa lesada", "exsudados", "feridas"],
+    )
     rule5 = citation_for_matching_text(
         generation_indices,
         records,
@@ -3624,6 +3668,11 @@ def build_canonical_classification_answer(
         generation_indices,
         records,
         ["regra n.o 11", "regra n.º 11", "regra 11", "software destinado a prestar informações"],
+    )
+    rule12 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["regra n.o 12", "regra n.º 12", "regra 12", "administrar medicamentos", "administração de medicamentos", "administracao de medicamentos", "fluidos corporais", "outras substâncias", "outras substancias"],
     )
     ai6 = citation_for_matching_text(
         generation_indices,
@@ -3661,6 +3710,44 @@ def build_canonical_classification_answer(
     ])
 
     is_simple_thermometer = is_thermometer and not is_active_or_digital_thermometer
+    
+    is_wound_dressing = bool(plan.get("is_wound_dressing")) or any(x in q for x in [
+        "compressa",
+        "penso",
+        "curativo",
+        "ferida",
+        "feridas",
+        "exsudado",
+        "exsudados",
+    ])
+
+    is_superficial_wound_dressing = bool(plan.get("is_superficial_wound_dressing")) or any(x in q for x in [
+        "ferida superficial",
+        "feridas superficiais",
+        "superficial",
+        "superficiais",
+    ])
+
+    is_drug_administration = bool(plan.get("is_drug_administration")) or any(x in q for x in [
+        "perfusão",
+        "perfusao",
+        "infusão",
+        "infusao",
+        "bomba de infusão",
+        "bomba de infusao",
+        "administra medicação",
+        "administra medicacao",
+        "administrar medicação",
+        "administrar medicacao",
+        "administra medicamento",
+        "administrar medicamento",
+    ])
+
+    is_insulin_dose_software = bool(plan.get("is_insulin_dose_software")) or (
+        ("software" in q or "app" in q or "algoritmo" in q)
+        and any(x in q for x in ["insulina", "glicemia", "diabetes"])
+        and any(x in q for x in ["dose", "dosagem", "calcula", "calcular", "recomenda", "recomendação", "recomendacao"])
+    )
 
     is_software_diagnosis = (
         "software" in q
@@ -3727,6 +3814,50 @@ def build_canonical_classification_answer(
         ]
         return f"{fixed}\n\n" + "\n".join(body).strip()
 
+    if is_wound_dressing and rule4:
+        if is_superficial_wound_dressing:
+            classe_line = (
+                f"- Classe provável: Classe I, se a compressa/penso se destinar a feridas superficiais e atuar principalmente como barreira mecânica, compressão ou absorção de exsudados. {cite(rule4)}"
+            )
+        else:
+            classe_line = (
+                f"- Classe provável: depende da finalidade e do tipo de ferida. Pela Regra 4, pode ser Classe I, IIa ou IIb conforme o contacto com pele/membrana mucosa lesada e a função pretendida. {cite(rule4)}"
+            )
+
+        body = [
+            "2. Classe MDR provável",
+            classe_line,
+            "- Se o produto se destinar principalmente a controlar o microambiente da pele ou membrana mucosa lesada, pode ser Classe IIa.",
+            "- Se se destinar a feridas mais graves, por exemplo lesões cutâneas que tenham fissurado a derme e só possam cicatrizar por segunda intenção, pode ser Classe IIb.",
+            "- A esterilidade não muda por si só a regra de classificação de base, mas pode implicar envolvimento de organismo notificado para os aspetos de esterilidade.",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Tipo de ferida: superficial, lesão com derme fissurada, membrana mucosa lesada ou ferida crónica.",
+            "- Função principal: barreira/absorção, controlo de microambiente ou tratamento de ferida grave.",
+            "- Se é fornecida estéril.",
+            *citations_block([art51, annex8, rule4]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+
+
+    if is_drug_administration and rule12:
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: Classe IIa, se for um dispositivo ativo destinado a administrar ou remover medicamentos, fluidos corporais ou outras substâncias. {cite(rule12)}",
+            "- Pode passar para Classe IIb se a administração ou remoção for potencialmente perigosa, tendo em conta a natureza das substâncias, a parte do corpo envolvida ou o modo de aplicação.",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Medicamento/substância administrada.",
+            "- Se a administração é automática, programável, contínua ou crítica.",
+            "- Risco clínico de sobredosagem, subdosagem, atraso ou interrupção.",
+            "- Contexto de utilização: hospitalar, domiciliário, emergência ou cuidados intensivos.",
+            *citations_block([art51, annex8, rule12]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+    
+    
     if is_simple_thermometer and rule1:
         body = [
             "2. Classe MDR provável",
@@ -3772,7 +3903,25 @@ def build_canonical_classification_answer(
             *citations_block([art2, art51, annex8, rule11, ai6]),
         ]
         return f"{fixed}\n\n" + "\n".join(body).strip()
-
+    
+    if is_insulin_dose_software and rule11:
+        body = [
+            "2. Classe MDR provável",
+            f"- Classe provável: Classe IIb, se o software calcula/recomenda dose de insulina usada numa decisão terapêutica e uma recomendação errada puder causar deterioração grave do estado de saúde. {cite(rule11)}",
+            "- Pode ser Classe III se a decisão suportada puder causar morte ou deterioração irreversível do estado de saúde.",
+            "- O ponto de partida da Regra 11 para software que presta informações usadas em decisões terapêuticas ou de diagnóstico é Classe IIa; no caso de dose de insulina, deve ser avaliada a subida para Classe IIb ou III conforme o impacto clínico previsível.",
+            f"- A classificação deve ser feita pelas regras do Anexo VIII. {cite(art51 or annex8)}",
+            "",
+            "3. Condições a confirmar",
+            "- Se o software apenas informa ou recomenda diretamente uma dose.",
+            "- Se existe validação por profissional de saúde ou administração automática.",
+            "- Consequências clínicas previsíveis de dose errada: hipoglicemia, hiperglicemia, hospitalização, coma ou morte.",
+            "- População-alvo e contexto de utilização.",
+            *citations_block([art51, annex8, rule11]),
+        ]
+        return f"{fixed}\n\n" + "\n".join(body).strip()
+    
+    
     if is_software_diagnosis and rule11:
         body = [
             "2. Classe MDR provável",
@@ -4026,6 +4175,46 @@ def build_canonical_classification_and_scope_answer(
     return f"{fixed}\n\n" + "\n".join(body).strip()
 
 
+
+def build_canonical_ai_provider_obligations_answer(
+    *,
+    question: str,
+    plan: Dict[str, Any],
+    generation_indices: List[int],
+    records: List[Dict[str, Any]],
+) -> Optional[str]:
+    if plan.get("intent") != "ai_provider_obligations":
+        return None
+
+    fixed = build_fixed_regulations_section(plan)
+
+    art16 = citation_for_matching_text(
+        generation_indices,
+        records,
+        ["artigo 16", "obrigações dos prestadores", "obrigacoes dos prestadores"],
+    )
+
+    if not art16:
+        return None
+
+    body = [
+        "2. Obrigações principais do prestador de sistema de IA de risco elevado",
+        f"1. Assegurar que o sistema de IA de risco elevado cumpre os requisitos aplicáveis. [{art16}]",
+        f"2. Indicar no sistema, embalagem ou documentação o nome, nome comercial/marca registada e endereço de contacto do prestador, quando aplicável. [{art16}]",
+        f"3. Dispor de um sistema de gestão da qualidade. [{art16}]",
+        f"4. Conservar a documentação exigida. [{art16}]",
+        f"5. Manter, quando esteja sob o seu controlo, os registos gerados automaticamente pelo sistema. [{art16}]",
+        f"6. Assegurar que o sistema é sujeito ao procedimento de avaliação da conformidade aplicável. [{art16}]",
+        f"7. Elaborar a declaração UE de conformidade. [{art16}]",
+        f"8. Apor a marcação CE quando aplicável. [{art16}]",
+        "",
+        "3. Citações usadas",
+        f"- {art16}",
+    ]
+
+    return f"{fixed}\n\n" + "\n".join(body).strip()
+
+
 def answer_question(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     if not OLLAMA_CHAT_MODEL:
         raise ValueError("Falta OLLAMA_CHAT_MODEL no .env")
@@ -4157,6 +4346,27 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
                 adjusted_scores,
             ),
             "answer": canonical_classification_answer,
+            "retrieval_backend": retrieval_backend,
+        }
+        
+    canonical_ai_provider_answer = build_canonical_ai_provider_obligations_answer(
+        question=question_clean,
+        plan=plan,
+        generation_indices=generation_indices,
+        records=records,
+    )
+
+    if canonical_ai_provider_answer:
+        return {
+            "intent": plan["intent"],
+            "target_docs": plan["target_docs"],
+            "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
+            "generation_sources": records_preview(
+                cited_generation_indices(canonical_ai_provider_answer, generation_indices, records),
+                records,
+                adjusted_scores,
+            ),
+            "answer": canonical_ai_provider_answer,
             "retrieval_backend": retrieval_backend,
         }
         
