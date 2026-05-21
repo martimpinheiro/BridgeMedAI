@@ -79,12 +79,40 @@ def _get_session(session_id: str, user_id: str) -> QuestionnaireSession:
 # ---------------------------------------------------------------------------
 # Construção da fila a partir dos placeholders
 # ---------------------------------------------------------------------------
-def _norm_key(raw_text: str) -> str:
-    """Chave de deduplicação por TEXTO (normalizado) — para colapsar
-    `<name of the product>` em todos os templates numa só pergunta."""
-    import re
-    return re.sub(r"\s+", " ", raw_text or "").strip().lower()
+def _norm_key(raw_text: str, context: str = "") -> str:
+    """
+    Chave de deduplicação.
 
+    Campos globais como nome do produto, versão, fabricante, Basic UDI-DI
+    devem ser deduplicados entre templates.
+    Campos genéricos como 'enter number between 0 and 3' devem incluir contexto,
+    senão perguntas diferentes podem colapsar numa só.
+    """
+    import re
+
+    raw_norm = re.sub(r"\s+", " ", raw_text or "").strip().lower()
+    ctx_norm = re.sub(r"\s+", " ", context or "").strip().lower()
+
+    global_fields = {
+        "name of the product",
+        "product name",
+        "device name",
+        "version of the product",
+        "version of the software",
+        "software version",
+        "basic udi-di, if/when available",
+        "company",
+        "manufacturer",
+        "manufacturer name",
+    }
+
+    if raw_norm in global_fields:
+        return raw_norm
+
+    if raw_norm.startswith("enter number between"):
+        return f"{raw_norm}::{ctx_norm}"
+
+    return raw_norm
 
 def _build_question_queue(
     placeholders_by_template: Dict[str, List[Placeholder]],
@@ -101,7 +129,7 @@ def _build_question_queue(
     # template, pela ordem do placeholder no documento.
     for template_id, phs in placeholders_by_template.items():
         for ph in phs:
-            nk = _norm_key(ph.raw_text)
+            nk = _norm_key(ph.raw_text, ph.context)
             if nk in by_norm:
                 by_norm[nk]["occurrences"].append((template_id, ph))
                 continue
@@ -264,8 +292,10 @@ def _build_question_response(session: QuestionnaireSession) -> Dict[str, Any]:
     ph: Placeholder = current["reference"]
     occurrences = current["occurrences"]
 
-    question = humanize_placeholder_text(ph.raw_text)
     contexts = sorted({occ[1].context for occ in occurrences if occ[1].context})
+    context_text = ", ".join(contexts)
+
+    question = humanize_placeholder_text(ph.raw_text, context_text)
     where_in = sorted({get_record(occ[0]).name for occ in occurrences})
 
     total = len(session.question_queue)
@@ -279,8 +309,9 @@ def _build_question_response(session: QuestionnaireSession) -> Dict[str, Any]:
         "state": "asking",
         "question": question,
         "hint": (
-            f"Texto original no template: «{ph.raw_text}»"
-            + (f" (secção: {', '.join(contexts)})" if contexts else "")
+            f"Secção do template: {context_text}."
+            if context_text
+            else "Campo extraído do template."
         ),
         "placeholder_raw": ph.raw_text,
         "context": ", ".join(contexts) if contexts else None,
@@ -300,7 +331,7 @@ def _complete_and_generate(session: QuestionnaireSession) -> Dict[str, Any]:
     for template_id, instance_id in session.instance_ids.items():
         substitutions: Dict[str, str] = {}
         for ph in session.placeholders_by_template.get(template_id, []):
-            nk = _norm_key(ph.raw_text)
+            nk = _norm_key(ph.raw_text, ph.context)
             ans = session.answered.get(nk)
             if ans:
                 substitutions[ph.full_match] = ans

@@ -194,161 +194,275 @@ def extract_placeholders(template_path: Path) -> List[Placeholder]:
 # ---------------------------------------------------------------------------
 # Construção de perguntas em PT para um placeholder
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Mapeamentos PT — placeholder Fraunhofer → pergunta semântica
-# ---------------------------------------------------------------------------
-# Estratégia em camadas:
-#   1) match exato (case-insensitive) — para os placeholders comuns
-#   2) match por palavras-chave dentro do texto (substring)
-#   3) heurística baseada na primeira frase / palavras estruturais
-# Em todas as camadas a CHAVE de substituição permanece o `<...>` original;
-# só a PERGUNTA que mostramos ao user é que muda.
 
-# Mapeamentos exatos — chave normalizada (lowercase, espaços colapsados,
-# sem ponto final). Cobre os placeholders que vimos nos 36 templates.
-_EXACT_MAP = {
-    # Identificação do produto
-    "name of the product": "Qual é o nome do produto?",
-    "version of the product": "Qual é a versão do produto?",
-    "version of the software": "Qual é a versão do software?",
-    "basic udi-di, if/when available": "Qual é o Basic UDI-DI (se já tens)?",
-    "company": "Qual é o nome da empresa/fabricante?",
-
-    # Versionamento / autoria
-    "name": "Qual é o teu nome (para ficar registado)?",
-    "date": "Que data devo colocar? (AAAA-MM-DD)",
-    "author": "Quem é o autor deste documento?",
-    "approved by": "Quem aprova este documento?",
-    "created by": "Quem criou este documento?",
-    "description of change": "Resume a alteração principal desta versão.",
-    "version": "Qual é o número da versão? (ex: 1.0)",
-
-    # Clínico
-    "intended purpose": "Qual é a finalidade prevista do dispositivo?",
-    "intended use": "Para que serve o dispositivo? (uso pretendido)",
-    "indication": "Quais são as indicações de uso?",
-    "indications": "Quais são as indicações de uso?",
-    "contraindication": "Há contraindicações?",
-    "contraindications": "Há contraindicações?",
-    "target population": "Qual é a população-alvo do dispositivo?",
-    "patient population": "Qual é a população de doentes?",
-    "intended users": "Quem são os utilizadores-alvo?",
-    "user profile": "Descreve o perfil dos utilizadores.",
-    "clinical benefit": "Quais são os benefícios clínicos esperados?",
-    "clinical benefits": "Quais são os benefícios clínicos esperados?",
-
-    # Risco
-    "hazard": "Que perigo (hazard) estás a descrever?",
-    "harm": "Qual é o dano potencial?",
-    "severity": "Qual a severidade estimada?",
-    "probability": "Qual a probabilidade estimada?",
-    "risk control measure": "Descreve a medida de controlo de risco.",
-    "residual risk": "Qual é o risco residual após as medidas?",
-
-    # Software / IA
-    "software item": "Descreve o item de software.",
-    "software unit": "Descreve a unidade de software.",
-    "soup name": "Qual é o nome do componente SOUP/OTS?",
-    "soup version": "Qual é a versão do componente SOUP/OTS?",
-    "ai model": "Descreve o modelo de IA usado.",
-
-    # Cibersegurança
-    "threat": "Que ameaça de cibersegurança estás a descrever?",
-    "vulnerability": "Qual é a vulnerabilidade?",
-    "asset": "Qual é o ativo a proteger?",
-}
-
-# Tokens "qualificadores" que apenas indicam tipo de campo — mapeados
-# directamente para a pergunta principal mesmo que sejam parte de placeholders
-# mais longos (ex: 'version of the product. If standalone software...').
-_KEYWORD_TRIGGERS = [
-    ("version of the product", "Qual é a versão do produto?"),
-    ("version of the software", "Qual é a versão do software?"),
-    ("name of the product", "Qual é o nome do produto?"),
-    ("basic udi-di", "Qual é o Basic UDI-DI?"),
-    ("intended purpose", "Qual é a finalidade prevista do dispositivo?"),
-    ("intended use", "Para que serve o dispositivo? (uso pretendido)"),
-    ("target population", "Qual é a população-alvo?"),
-    ("patient population", "Qual é a população de doentes?"),
-    ("clinical benefit", "Quais são os benefícios clínicos esperados?"),
-    ("residual risk", "Qual é o risco residual?"),
-    ("description of change", "Resume a alteração principal."),
-]
-
-
-def _normalize_lookup(text: str) -> str:
-    import re as _re
-    s = _re.sub(r"\s+", " ", text or "").strip().lower()
-    # tira pontuação final
-    s = s.rstrip(".:,;")
-    return s
-
-
-def _first_sentence(text: str, max_len: int = 90) -> str:
-    """Devolve a primeira frase do placeholder (até ao primeiro ponto ou
-    vírgula) — útil para placeholders longos com instruções extra."""
-    if not text:
-        return ""
-    import re as _re
-    # corta no primeiro ponto/. , ;
-    for sep in [". ", ".\n", "; ", ", If ", ", if ", " (e.g.", " (i.e."]:
-        idx = text.find(sep)
-        if idx > 0:
-            return text[:idx].strip()
-    if len(text) > max_len:
-        return text[:max_len].rstrip() + "…"
-    return text.strip()
-
-
-def humanize_placeholder_text(raw_text: str) -> str:
-    """Converte o texto cru de um placeholder Fraunhofer numa pergunta legível.
-
-    Em todas as camadas a chave de substituição (`<placeholder>`) permanece —
-    só muda a PERGUNTA mostrada ao user.
+def humanize_placeholder_text(raw_text: str, context: str = "") -> str:
     """
-    if not raw_text or not raw_text.strip():
-        return "Indica o valor."
+    Converte o texto cru de um placeholder do template numa pergunta clara
+    em português de Portugal.
 
-    norm = _normalize_lookup(raw_text)
+    A função é centralizada para servir todos os templates .docx:
+    Clinical Evaluation, Software, Risk Management, Usability, Vigilance, PMS/PMCF, etc.
+    """
+    raw = _normalize(raw_text or "")
+    t = raw.lower()
+    ctx = _normalize(context or "").lower()
 
-    # 1) match exato
-    if norm in _EXACT_MAP:
-        return _EXACT_MAP[norm]
+    def has_any(*terms: str) -> bool:
+        return any(term in t for term in terms)
 
-    # 2) match por palavras-chave (substring) — apanha placeholders longos
-    for keyword, question in _KEYWORD_TRIGGERS:
-        if keyword in norm:
-            return question
+    # ---------------------------------------------------------
+    # Casos numéricos genéricos
+    # Ex.: "enter number between 0 and 3"
+    # ---------------------------------------------------------
+    m = re.search(r"enter\s+number\s+between\s+(\d+)\s+and\s+(\d+)", t)
+    if m:
+        low, high = m.group(1), m.group(2)
 
-    # 3) heurística por palavras estruturais
-    first = _first_sentence(raw_text)
-    first_lc = first.lower()
+        if "clinical equivalence" in ctx or "equivalence" in ctx:
+            return (
+                f"Quantos dispositivos equivalentes queres considerar na análise de equivalência clínica? "
+                f"Indica um número entre {low} e {high}."
+            )
 
-    if first_lc.startswith("enter "):
-        # 'enter number between 0 and 3' → 'Indica um número entre 0 e 3.'
-        rest = first[6:].strip()
-        # traduções simples
-        rest = (rest
-            .replace("number between", "um número entre")
-            .replace("date", "uma data")
-            .replace("text", "um texto")
-            .replace(" and ", " e ")
+        if (
+            "post-market" in ctx
+            or "surveillance" in ctx
+            or "clinical follow-up" in ctx
+            or "pmcf" in ctx
+            or "pms" in ctx
+        ):
+            return (
+                f"Quantas fontes, atividades ou evidências de PMS/PMCF queres indicar nesta secção? "
+                f"Indica um número entre {low} e {high}."
+            )
+
+        if "risk" in ctx or "risco" in ctx:
+            return f"Que valor numérico de risco queres indicar? Usa um número entre {low} e {high}."
+
+        if "usability" in ctx or "human factors" in ctx:
+            return f"Quantos cenários/tarefas de usabilidade queres indicar? Usa um número entre {low} e {high}."
+
+        return f"Indica um número entre {low} e {high} para este campo."
+
+    # ---------------------------------------------------------
+    # Mapeamentos exatos comuns
+    # ---------------------------------------------------------
+    direct = {
+        "name of the product": "Qual é o nome comercial do produto?",
+        "product name": "Qual é o nome comercial do produto?",
+        "device name": "Qual é o nome do dispositivo?",
+        "name of device": "Qual é o nome do dispositivo?",
+
+        "version of the product": "Qual é a versão do produto?",
+        "version of the software": "Qual é a versão do software?",
+        "software version": "Qual é a versão do software?",
+        "basic udi-di, if/when available": "Qual é o Basic UDI-DI? Se ainda não existir, escreve “saltar”.",
+
+        "company": "Qual é o nome da empresa/fabricante?",
+        "manufacturer": "Qual é o nome do fabricante?",
+        "manufacturer name": "Qual é o nome do fabricante?",
+        "manufacturer address": "Qual é a morada do fabricante?",
+        "address": "Qual é a morada?",
+        "email": "Qual é o email de contacto?",
+        "phone": "Qual é o telefone de contacto?",
+
+        "name": "Qual é o nome?",
+        "date": "Que data devo colocar? Usa o formato AAAA-MM-DD.",
+        "author": "Quem é o autor do documento?",
+        "reviewer": "Quem é o revisor do documento?",
+        "approver": "Quem aprova o documento?",
+        "approved by": "Quem aprovou?",
+        "created by": "Quem criou?",
+        "description of change": "Qual é a descrição da alteração?",
+        "version": "Qual é a versão?",
+    }
+
+    if t in direct:
+        return direct[t]
+
+    # ---------------------------------------------------------
+    # Casos longos / frases específicas dos templates
+    # ---------------------------------------------------------
+    if "version of the product" in t and "standalone software" in t:
+        return (
+            "Qual é a versão do produto? "
+            "Se for software autónomo e só fizer sentido indicar a versão de software, podes escrever “saltar”."
         )
-        return f"Indica {rest}."
 
-    if first_lc.startswith("describe ") or first_lc.startswith("description"):
-        rest = first.split(" ", 1)[1] if " " in first else first
-        return f"Descreve {rest.lower()}."
+    if "basic udi-di" in t:
+        return "Qual é o Basic UDI-DI? Se ainda não estiver disponível, escreve “saltar”."
 
-    if "version" in norm:
-        return f"Qual é a versão? (referência no template: «{first}»)"
-    if "name of " in norm or norm.startswith("name "):
-        return f"Qual é o nome? (referência no template: «{first}»)"
-    if "date" in norm:
-        return f"Que data devo colocar? (AAAA-MM-DD) — campo: «{first}»"
-    if norm.startswith("if "):
-        # 'if standalone software, use...' — não é placeholder real útil
-        return f"Indica o valor para: «{first}»"
+    if "single registration number" in t or t == "srn" or " srn" in t:
+        return "Qual é o Single Registration Number (SRN) do fabricante? Se ainda não existir, escreve “saltar”."
 
-    # fallback: usa a primeira frase mas com framing de pergunta
-    return f"Indica: {first}"
+    if "notified body" in t:
+        return "Qual é o organismo notificado aplicável? Se não for aplicável, escreve “não aplicável”."
+
+    if "certificate" in t and "number" in t:
+        return "Qual é o número do certificado CE? Se ainda não existir ou não for aplicável, escreve “saltar”."
+
+    # ---------------------------------------------------------
+    # Clinical Evaluation / PMCF / PMS
+    # ---------------------------------------------------------
+    if has_any("intended purpose", "intended use"):
+        return "Qual é a finalidade prevista do dispositivo, exatamente como deve constar na documentação técnica?"
+
+    if has_any("intended users", "user group", "users"):
+        return "Quem são os utilizadores previstos do dispositivo?"
+
+    if has_any("patient population", "target population", "population"):
+        return "Qual é a população de doentes/utilizadores alvo?"
+
+    if has_any("medical indication", "indication", "clinical indication"):
+        return "Quais são as indicações clínicas previstas?"
+
+    if "contraindication" in t:
+        return "Quais são as contraindicações conhecidas? Se não houver, escreve “nenhuma identificada”."
+
+    if "clinical benefit" in t:
+        return "Qual é o benefício clínico esperado do dispositivo?"
+
+    if "clinical claim" in t or "claims" in t:
+        return "Que alegações clínicas/desempenho queres declarar para o dispositivo?"
+
+    if "clinical evidence" in t:
+        return "Que evidência clínica suporta a segurança e o desempenho do dispositivo?"
+
+    if "clinical equivalence" in t:
+        return "Que dispositivo(s) equivalente(s), se existirem, devem ser considerados na avaliação clínica?"
+
+    if "pmcf objective" in t or "objectives" in t and ("pmcf" in ctx or "clinical follow-up" in ctx):
+        return "Quais são os objetivos específicos do PMCF?"
+
+    if "pmcf method" in t or "methods" in t and ("pmcf" in ctx or "clinical follow-up" in ctx):
+        return "Que métodos PMCF queres usar? Por exemplo, literatura, inquéritos, registos, reclamações ou estudo PMCF."
+
+    if "post-market surveillance" in t or "pms" in t:
+        return "Que atividades de vigilância pós-comercialização/PMS queres indicar?"
+
+    # ---------------------------------------------------------
+    # Software / IEC 62304
+    # ---------------------------------------------------------
+    if "software safety class" in t or "software safety classification" in t:
+        return "Qual é a classe de segurança do software segundo IEC 62304? Indica A, B ou C e a justificação."
+
+    if "software development plan" in t:
+        return "Qual é o plano ou referência do plano de desenvolvimento de software?"
+
+    if "software architecture" in t:
+        return "Descreve resumidamente a arquitetura do software ou indica o documento onde está descrita."
+
+    if "software requirement" in t or "requirements specification" in t:
+        return "Que requisito de software deve ser indicado neste campo?"
+
+    if "system requirement" in t or "stakeholder requirement" in t:
+        return "Que requisito de sistema/stakeholder deve ser indicado neste campo?"
+
+    if "test protocol" in t:
+        return "Qual é o protocolo de teste aplicável?"
+
+    if "test result" in t:
+        return "Qual foi o resultado do teste?"
+
+    if "known anomaly" in t or "known anomalies" in t:
+        return "Existem anomalias conhecidas nesta versão? Se não houver, escreve “nenhuma conhecida”."
+
+    if "release" in t and "version" in t:
+        return "Qual é a versão/release de software a documentar?"
+
+    # ---------------------------------------------------------
+    # Risk Management / ISO 14971
+    # ---------------------------------------------------------
+    if "hazardous situation" in t:
+        return "Qual é a situação perigosa identificada?"
+
+    if "hazard" in t:
+        return "Qual é o perigo identificado?"
+
+    if "harm" in t:
+        return "Qual é o dano possível para o doente/utilizador?"
+
+    if "severity" in t:
+        return "Qual é a severidade estimada do dano?"
+
+    if "probability" in t or "occurrence" in t:
+        return "Qual é a probabilidade estimada de ocorrência?"
+
+    if "risk control" in t or "mitigation" in t:
+        return "Que medida de controlo/mitigação de risco deve ser indicada?"
+
+    if "residual risk" in t:
+        return "Qual é o risco residual após as medidas de controlo?"
+
+    if "risk acceptability" in t or "acceptable" in t:
+        return "O risco residual é aceitável? Indica a justificação."
+
+    # ---------------------------------------------------------
+    # Usability / Human Factors
+    # ---------------------------------------------------------
+    if "use scenario" in t:
+        return "Qual é o cenário de utilização a considerar?"
+
+    if "critical task" in t:
+        return "Qual é a tarefa crítica de utilização?"
+
+    if "use error" in t:
+        return "Que erro de utilização pode ocorrer?"
+
+    if "user interface" in t:
+        return "Que elemento da interface de utilizador está a ser avaliado?"
+
+    if "formative" in t:
+        return "Que atividade/teste formativo de usabilidade queres indicar?"
+
+    if "summative" in t:
+        return "Que teste somativo de usabilidade queres indicar?"
+
+    # ---------------------------------------------------------
+    # Vigilance / Incident / CAPA
+    # ---------------------------------------------------------
+    if "incident description" in t or "description of incident" in t:
+        return "Descreve o incidente ocorrido."
+
+    if "incident date" in t:
+        return "Qual foi a data do incidente? Usa o formato AAAA-MM-DD."
+
+    if "serious incident" in t:
+        return "O incidente é grave? Indica sim/não e justifica."
+
+    if "field safety corrective action" in t or "fsca" in t:
+        return "Que ação corretiva de segurança no terreno (FSCA) foi ou será tomada?"
+
+    if "field safety notice" in t or "fsn" in t:
+        return "Que mensagem principal deve constar no Field Safety Notice?"
+
+    if "competent authority" in t:
+        return "Qual é a autoridade competente a notificar?"
+
+    if "root cause" in t:
+        return "Qual é a causa raiz identificada?"
+
+    if "corrective action" in t:
+        return "Que ação corretiva deve ser registada?"
+
+    if "preventive action" in t:
+        return "Que ação preventiva deve ser registada?"
+
+    # ---------------------------------------------------------
+    # Datas / versões / pessoas — heurísticas finais
+    # ---------------------------------------------------------
+    if "date" in t:
+        return f"Que data devo colocar para “{raw}”? Usa o formato AAAA-MM-DD."
+
+    if "version" in t:
+        return f"Qual é a versão aplicável para “{raw}”?"
+
+    if "name" in t:
+        return f"Qual é o nome a preencher neste campo?"
+
+    if "description" in t:
+        return f"Que descrição devo colocar neste campo?"
+
+    # Fallback final sem inglês solto no início
+    return f"Que informação queres preencher neste campo: “{raw}”?"
+
