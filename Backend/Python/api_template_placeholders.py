@@ -194,31 +194,161 @@ def extract_placeholders(template_path: Path) -> List[Placeholder]:
 # ---------------------------------------------------------------------------
 # Construção de perguntas em PT para um placeholder
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Mapeamentos PT — placeholder Fraunhofer → pergunta semântica
+# ---------------------------------------------------------------------------
+# Estratégia em camadas:
+#   1) match exato (case-insensitive) — para os placeholders comuns
+#   2) match por palavras-chave dentro do texto (substring)
+#   3) heurística baseada na primeira frase / palavras estruturais
+# Em todas as camadas a CHAVE de substituição permanece o `<...>` original;
+# só a PERGUNTA que mostramos ao user é que muda.
+
+# Mapeamentos exatos — chave normalizada (lowercase, espaços colapsados,
+# sem ponto final). Cobre os placeholders que vimos nos 36 templates.
+_EXACT_MAP = {
+    # Identificação do produto
+    "name of the product": "Qual é o nome do produto?",
+    "version of the product": "Qual é a versão do produto?",
+    "version of the software": "Qual é a versão do software?",
+    "basic udi-di, if/when available": "Qual é o Basic UDI-DI (se já tens)?",
+    "company": "Qual é o nome da empresa/fabricante?",
+
+    # Versionamento / autoria
+    "name": "Qual é o teu nome (para ficar registado)?",
+    "date": "Que data devo colocar? (AAAA-MM-DD)",
+    "author": "Quem é o autor deste documento?",
+    "approved by": "Quem aprova este documento?",
+    "created by": "Quem criou este documento?",
+    "description of change": "Resume a alteração principal desta versão.",
+    "version": "Qual é o número da versão? (ex: 1.0)",
+
+    # Clínico
+    "intended purpose": "Qual é a finalidade prevista do dispositivo?",
+    "intended use": "Para que serve o dispositivo? (uso pretendido)",
+    "indication": "Quais são as indicações de uso?",
+    "indications": "Quais são as indicações de uso?",
+    "contraindication": "Há contraindicações?",
+    "contraindications": "Há contraindicações?",
+    "target population": "Qual é a população-alvo do dispositivo?",
+    "patient population": "Qual é a população de doentes?",
+    "intended users": "Quem são os utilizadores-alvo?",
+    "user profile": "Descreve o perfil dos utilizadores.",
+    "clinical benefit": "Quais são os benefícios clínicos esperados?",
+    "clinical benefits": "Quais são os benefícios clínicos esperados?",
+
+    # Risco
+    "hazard": "Que perigo (hazard) estás a descrever?",
+    "harm": "Qual é o dano potencial?",
+    "severity": "Qual a severidade estimada?",
+    "probability": "Qual a probabilidade estimada?",
+    "risk control measure": "Descreve a medida de controlo de risco.",
+    "residual risk": "Qual é o risco residual após as medidas?",
+
+    # Software / IA
+    "software item": "Descreve o item de software.",
+    "software unit": "Descreve a unidade de software.",
+    "soup name": "Qual é o nome do componente SOUP/OTS?",
+    "soup version": "Qual é a versão do componente SOUP/OTS?",
+    "ai model": "Descreve o modelo de IA usado.",
+
+    # Cibersegurança
+    "threat": "Que ameaça de cibersegurança estás a descrever?",
+    "vulnerability": "Qual é a vulnerabilidade?",
+    "asset": "Qual é o ativo a proteger?",
+}
+
+# Tokens "qualificadores" que apenas indicam tipo de campo — mapeados
+# directamente para a pergunta principal mesmo que sejam parte de placeholders
+# mais longos (ex: 'version of the product. If standalone software...').
+_KEYWORD_TRIGGERS = [
+    ("version of the product", "Qual é a versão do produto?"),
+    ("version of the software", "Qual é a versão do software?"),
+    ("name of the product", "Qual é o nome do produto?"),
+    ("basic udi-di", "Qual é o Basic UDI-DI?"),
+    ("intended purpose", "Qual é a finalidade prevista do dispositivo?"),
+    ("intended use", "Para que serve o dispositivo? (uso pretendido)"),
+    ("target population", "Qual é a população-alvo?"),
+    ("patient population", "Qual é a população de doentes?"),
+    ("clinical benefit", "Quais são os benefícios clínicos esperados?"),
+    ("residual risk", "Qual é o risco residual?"),
+    ("description of change", "Resume a alteração principal."),
+]
+
+
+def _normalize_lookup(text: str) -> str:
+    import re as _re
+    s = _re.sub(r"\s+", " ", text or "").strip().lower()
+    # tira pontuação final
+    s = s.rstrip(".:,;")
+    return s
+
+
+def _first_sentence(text: str, max_len: int = 90) -> str:
+    """Devolve a primeira frase do placeholder (até ao primeiro ponto ou
+    vírgula) — útil para placeholders longos com instruções extra."""
+    if not text:
+        return ""
+    import re as _re
+    # corta no primeiro ponto/. , ;
+    for sep in [". ", ".\n", "; ", ", If ", ", if ", " (e.g.", " (i.e."]:
+        idx = text.find(sep)
+        if idx > 0:
+            return text[:idx].strip()
+    if len(text) > max_len:
+        return text[:max_len].rstrip() + "…"
+    return text.strip()
+
+
 def humanize_placeholder_text(raw_text: str) -> str:
     """Converte o texto cru de um placeholder Fraunhofer numa pergunta legível.
 
-    A maioria dos Fraunhofer está em inglês ('name of the product', 'version of
-    the software'). Mapeamos os mais comuns para PT; o resto fica no original
-    (que costuma ser claro)."""
-    t = raw_text.strip().lower()
-    # mapeamentos exatos comuns
-    direct = {
-        "name of the product": "Qual é o nome do produto?",
-        "version of the product": "Qual é a versão do produto?",
-        "version of the software": "Qual é a versão do software?",
-        "basic udi-di, if/when available": "Qual é o Basic UDI-DI? (deixa em branco se ainda não tens)",
-        "company": "Qual é o nome da empresa/fabricante?",
-        "name": "Qual é o nome?",
-        "date": "Que data devo colocar? (YYYY-MM-DD)",
-        "author": "Quem é o autor?",
-        "approved by": "Quem aprovou?",
-        "created by": "Quem criou?",
-        "description of change": "Qual é a descrição da alteração?",
-        "version": "Qual é a versão?",
-    }
-    if t in direct:
-        return direct[t]
-    # heurística genérica
-    if " of the " in t or "name" in t or "version" in t or "date" in t:
-        return f"Qual é o(a) {raw_text.strip()}?"
-    return f"Indica: {raw_text.strip()}"
+    Em todas as camadas a chave de substituição (`<placeholder>`) permanece —
+    só muda a PERGUNTA mostrada ao user.
+    """
+    if not raw_text or not raw_text.strip():
+        return "Indica o valor."
+
+    norm = _normalize_lookup(raw_text)
+
+    # 1) match exato
+    if norm in _EXACT_MAP:
+        return _EXACT_MAP[norm]
+
+    # 2) match por palavras-chave (substring) — apanha placeholders longos
+    for keyword, question in _KEYWORD_TRIGGERS:
+        if keyword in norm:
+            return question
+
+    # 3) heurística por palavras estruturais
+    first = _first_sentence(raw_text)
+    first_lc = first.lower()
+
+    if first_lc.startswith("enter "):
+        # 'enter number between 0 and 3' → 'Indica um número entre 0 e 3.'
+        rest = first[6:].strip()
+        # traduções simples
+        rest = (rest
+            .replace("number between", "um número entre")
+            .replace("date", "uma data")
+            .replace("text", "um texto")
+            .replace(" and ", " e ")
+        )
+        return f"Indica {rest}."
+
+    if first_lc.startswith("describe ") or first_lc.startswith("description"):
+        rest = first.split(" ", 1)[1] if " " in first else first
+        return f"Descreve {rest.lower()}."
+
+    if "version" in norm:
+        return f"Qual é a versão? (referência no template: «{first}»)"
+    if "name of " in norm or norm.startswith("name "):
+        return f"Qual é o nome? (referência no template: «{first}»)"
+    if "date" in norm:
+        return f"Que data devo colocar? (AAAA-MM-DD) — campo: «{first}»"
+    if norm.startswith("if "):
+        # 'if standalone software, use...' — não é placeholder real útil
+        return f"Indica o valor para: «{first}»"
+
+    # fallback: usa a primeira frase mas com framing de pergunta
+    return f"Indica: {first}"

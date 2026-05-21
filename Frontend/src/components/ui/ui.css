@@ -1,0 +1,477 @@
+/* ===========================================================================
+   BridgeMedAI · UI primitives
+   ---------------------------------------------------------------------------
+   Componentes base partilhados por todos os shells e dashboards.
+   Reusa os design tokens de index.css (forest/sage/cream/Fraunces/Geist).
+   =========================================================================== */
+
+/* ------------------------ Page header ------------------------------------- */
+.bmui-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 28px;
+  padding: 28px 0 22px;
+  border-bottom: 1px solid rgba(21, 42, 32, 0.1);
+}
+
+.bmui-page-header__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bmui-page-header__crumb {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faded);
+}
+
+.bmui-page-header__title {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(28px, 3.4vw, 40px);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--forest-deep);
+  margin: 0;
+}
+
+.bmui-page-header__title em {
+  font-style: italic;
+  color: var(--forest);
+}
+
+.bmui-page-header__sub {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink-muted);
+  max-width: 60ch;
+  margin-top: 4px;
+}
+
+.bmui-page-header__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ------------------------ Buttons ----------------------------------------- */
+.bmui-btn {
+  appearance: none;
+  border: 1px solid var(--forest);
+  background: var(--forest);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease,
+    border-color 160ms ease;
+  text-decoration: none;
+}
+
+.bmui-btn:hover {
+  transform: translateY(-1px);
+  background: var(--forest-deep);
+}
+
+.bmui-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.bmui-btn--ghost {
+  background: transparent;
+  color: var(--forest-deep);
+  border-color: rgba(21, 42, 32, 0.18);
+}
+
+.bmui-btn--ghost:hover {
+  background: rgba(205, 221, 192, 0.45);
+}
+
+.bmui-btn--small {
+  padding: 6px 11px;
+  font-size: 10px;
+}
+
+.bmui-btn--danger {
+  background: transparent;
+  border-color: rgba(162, 45, 45, 0.4);
+  color: var(--missing);
+}
+
+.bmui-btn--danger:hover {
+  background: rgba(162, 45, 45, 0.08);
+}
+
+/* ------------------------ Card -------------------------------------------- */
+.bmui-card {
+  background: var(--paper);
+  border: 1px solid var(--cream-edge);
+  border-radius: var(--r-md);
+  padding: 22px 22px 20px;
+  box-shadow: var(--shadow-soft);
+  position: relative;
+}
+
+.bmui-card--quiet {
+  background: transparent;
+  border: 1px dashed rgba(21, 42, 32, 0.14);
+  box-shadow: none;
+}
+
+.bmui-card--accent {
+  background: linear-gradient(160deg, var(--forest-deep) 0%, var(--forest) 100%);
+  border-color: var(--forest-deep);
+  color: var(--cream);
+}
+
+.bmui-card--accent .bmui-section-h,
+.bmui-card--accent .bmui-section-h::after {
+  color: var(--sage-light);
+}
+
+.bmui-card__title {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--forest-deep);
+  margin: 0 0 6px;
+}
+
+.bmui-card__sub {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 0 0 14px;
+}
+
+/* ------------------------ KPI card ---------------------------------------- */
+.bmui-kpi {
+  background: var(--paper);
+  border: 1px solid var(--cream-edge);
+  border-radius: var(--r-md);
+  padding: 18px 20px 16px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 128px;
+}
+
+.bmui-kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(205, 221, 192, 0.6), transparent 60%);
+  pointer-events: none;
+}
+
+.bmui-kpi__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: relative;
+}
+
+.bmui-kpi__label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faded);
+}
+
+.bmui-kpi__icon {
+  color: var(--forest-soft);
+  background: var(--sage-light);
+  border: 1px solid var(--sage-deep);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+}
+
+.bmui-kpi__value {
+  font-family: var(--display);
+  font-size: 38px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--forest-deep);
+  position: relative;
+}
+
+.bmui-kpi__value sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faded);
+  margin-left: 6px;
+  letter-spacing: 0.06em;
+  vertical-align: baseline;
+}
+
+.bmui-kpi__delta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  position: relative;
+}
+
+.bmui-kpi__delta--up {
+  color: var(--check);
+}
+
+.bmui-kpi__delta--down {
+  color: var(--missing);
+}
+
+/* ------------------------ Status pill ------------------------------------- */
+.bmui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 4px;
+  border-radius: var(--r-pill);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.bmui-pill--ok    { color: var(--check); }
+.bmui-pill--warn  { color: var(--pending); }
+.bmui-pill--info  { color: var(--info); }
+.bmui-pill--bad   { color: var(--missing); }
+.bmui-pill--muted { color: var(--ink-faded); }
+.bmui-pill--forest { color: var(--cream); background: var(--forest); border-color: var(--forest); }
+
+/* ------------------------ Section heading --------------------------------- */
+.bmui-section-h {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faded);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bmui-section-h::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(21, 42, 32, 0.08);
+}
+
+/* ------------------------ Empty state ------------------------------------- */
+.bmui-empty {
+  text-align: center;
+  padding: 32px 16px;
+  border: 1px dashed rgba(21, 42, 32, 0.15);
+  border-radius: var(--r-md);
+  background: rgba(250, 247, 236, 0.45);
+}
+
+.bmui-empty__title {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--forest-deep);
+  margin: 0 0 6px;
+}
+
+.bmui-empty__msg {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink-muted);
+  max-width: 38ch;
+  margin: 0 auto 14px;
+}
+
+/* ------------------------ Loading spinner --------------------------------- */
+.bmui-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faded);
+}
+
+.bmui-spinner::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sage-deep);
+  border-top-color: var(--forest);
+  animation: bmui-spin 0.85s linear infinite;
+}
+
+@keyframes bmui-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ------------------------ List rows --------------------------------------- */
+.bmui-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bmui-list__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px dashed rgba(21, 42, 32, 0.08);
+}
+
+.bmui-list__row:last-child {
+  border-bottom: none;
+}
+
+.bmui-list__primary {
+  font-family: var(--display);
+  font-size: 15px;
+  color: var(--forest-deep);
+  line-height: 1.3;
+}
+
+.bmui-list__meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-faded);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.bmui-list__actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ------------------------ Grid helpers ------------------------------------ */
+.bmui-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.bmui-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.bmui-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bmui-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 1100px) {
+  .bmui-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bmui-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .bmui-grid--4,
+  .bmui-grid--3,
+  .bmui-grid--2 { grid-template-columns: 1fr; }
+}
+
+/* ------------------------ Hero block (user dashboard) --------------------- */
+.bmui-hero {
+  background:
+    linear-gradient(140deg, var(--forest-deep) 0%, var(--forest) 60%, var(--forest-soft) 100%);
+  color: var(--cream);
+  border-radius: var(--r-lg);
+  padding: 32px 36px 36px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.bmui-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1.4px);
+  background-size: 4px 4px;
+  pointer-events: none;
+}
+
+.bmui-hero__eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--sage-light);
+  margin-bottom: 8px;
+}
+
+.bmui-hero__title {
+  font-family: var(--display);
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--cream);
+  margin: 0 0 14px;
+}
+
+.bmui-hero__title em {
+  font-style: italic;
+  color: var(--sage-light);
+}
+
+.bmui-hero__lead {
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--sage-light);
+  max-width: 56ch;
+  margin: 0 0 22px;
+}
+
+.bmui-hero__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: var(--r-pill);
+  background: var(--cream);
+  color: var(--forest-deep);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 200ms ease, background 200ms ease;
+}
+
+.bmui-hero__cta:hover {
+  background: var(--paper);
+  transform: translateY(-1px);
+}

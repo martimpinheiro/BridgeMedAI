@@ -1,0 +1,79 @@
+/* ===========================================================================
+   Embedded Chatbot — ChatbotApp.jsx dentro do UserLayout
+   ---------------------------------------------------------------------------
+   O ChatbotApp original assume layout fullscreen com aside + grid próprios.
+   Quando renderizado dentro do shell (UserLayout) duplica a sidebar.
+   Aqui escondemos a aside interna e forçamos o main a ocupar tudo.
+   =========================================================================== */
+
+.embedded-chat {
+  /* Reset do padding que o shell aplica no .bmshell__content para o chat
+     usar o espaço inteiro, edge-to-edge */
+  margin: -12px -36px -56px;  /* contrabalança o padding do bmshell__content */
+  height: calc(100vh - 64px); /* subtrair altura do topbar */
+}
+
+@media (max-width: 720px) {
+  .embedded-chat {
+    margin: -12px -20px -40px;
+  }
+}
+
+/* O root do ChatbotApp é um div com height:100dvh e grid de 2 cols (aside + main).
+   Mantemos o grid mas estreitamos a aside para uma "rail" só com Nova conversa
+   + lista de conversas. Brand e footer (user/logout) são escondidos via :nth-child
+   porque já estão no shell exterior. */
+.embedded-chat > div {
+  height: 100% !important;
+  grid-template-columns: 220px 1fr !important;
+}
+
+/* A sidebar interna do ChatbotApp tem children por esta ordem:
+     1. <div aria-hidden> — radial gradient decorativo
+     2. <div> brand row (logo + "BridgeMedAI Compliance assistant" + collapse btn)
+     3. <button> Nova conversa
+     4. <div> Histórico + lista de conversas
+     5. <div> footer com user info + Sair + health dot
+
+   Escondemos 2 (brand) e 5 (footer) — duplicam o shell. Mantemos 3 e 4. */
+.embedded-chat > div > aside > div:nth-child(2) {
+  display: none !important;
+}
+.embedded-chat > div > aside > div:last-of-type {
+  display: none !important;
+}
+
+/* Ajustar o main do chat para não ter aquele border-radius/shadow esquisito
+   herdado do layout fullscreen */
+.embedded-chat > div > section,
+.embedded-chat > div > main {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+/* Em viewport pequeno, deixa o chat ocupar tudo (sidebar interna some) */
+@media (max-width: 900px) {
+  .embedded-chat > div {
+    grid-template-columns: 1fr !important;
+  }
+  .embedded-chat > div > aside:first-of-type {
+    display: none !important;
+  }
+}
+
+/* Auto-resize visual: o JS já redimensiona o textarea via scrollHeight,
+   mas garantimos que a transição é suave e o max-height é generoso */
+.embedded-chat textarea {
+  transition: height 80ms ease;
+  max-height: 320px !important;  /* override do estilo inline */
+  overflow-y: auto;
+}
+
+.embedded-chat textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.embedded-chat textarea::-webkit-scrollbar-thumb {
+  background: rgba(21, 42, 32, 0.18);
+  border-radius: 999px;
+}

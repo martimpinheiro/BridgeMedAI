@@ -195,18 +195,19 @@ def register_specialist(
     email: str,
     password: str,
     full_name: str,
-    specialty: str,
-    institution: str,
-    country: str,
+    specialty: Optional[str] = None,
+    institution: Optional[str] = None,
+    country: Optional[str] = None,
 ) -> AuthUser:
-    """Registo de especialista — conta criada em estado `pending`."""
+    """Registo de especialista — conta criada em estado `pending`.
+
+    Os campos `specialty`, `institution` e `country` foram tornados opcionais
+    quando a narrativa do especialista mudou de "profissional médico de uma
+    instituição clínica" para "engenheiro regulatório / consultor MDR-AI Act".
+    Mantidos no schema da DB por retrocompatibilidade (e para informação
+    extra opcional), mas podem vir vazios.
+    """
     _validate_registration_payload(email, password, full_name)
-    if not specialty.strip():
-        raise ValueError("A especialidade é obrigatória.")
-    if not institution.strip():
-        raise ValueError("A instituição é obrigatória.")
-    if not country.strip():
-        raise ValueError("O país é obrigatório.")
 
     email_norm = email.strip().lower()
     password_hash = hash_password(password)
@@ -233,9 +234,9 @@ def register_specialist(
             VALUES (?, ?, ?, ?)
             """,
             user_id,
-            specialty.strip(),
-            institution.strip(),
-            country.strip(),
+            (specialty or "").strip() or None,
+            (institution or "").strip() or None,
+            (country or "").strip() or None,
         )
 
     user = get_user_by_id(user_id)

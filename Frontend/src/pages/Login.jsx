@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { apiJson } from "../auth/api.js";
 import AuthLayout, { field } from "../auth/AuthLayout.jsx";
@@ -9,10 +9,28 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const banner = useMemo(() => {
+    const r = searchParams.get("registered");
+    if (r === "specialist") {
+      return {
+        title: "Candidatura submetida ✓",
+        body: "A tua conta de especialista foi criada em estado pendente. Vais poder iniciar sessão assim que um administrador aprovar a candidatura.",
+      };
+    }
+    if (r === "user") {
+      return {
+        title: "Conta criada ✓",
+        body: "Já podes iniciar sessão com o teu email e password.",
+      };
+    }
+    return null;
+  }, [searchParams]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -46,6 +64,32 @@ export default function Login() {
         </>
       }
     >
+      {banner && (
+        <div style={{
+          marginBottom: 18,
+          padding: "12px 14px",
+          background: "rgba(47,122,61,0.08)",
+          border: "1px solid rgba(47,122,61,0.25)",
+          borderLeft: "3px solid var(--check)",
+          borderRadius: 8,
+          color: "var(--forest-deep)",
+        }}>
+          <div style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "var(--check)",
+            marginBottom: 4,
+          }}>
+            {banner.title}
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-muted)" }}>
+            {banner.body}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} noValidate>
         <div style={field.group}>
           <label htmlFor="email" style={field.label}>Email</label>

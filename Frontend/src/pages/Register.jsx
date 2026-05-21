@@ -28,17 +28,19 @@ export default function Register() {
       }
     >
       <Link to="/register/user" style={cardBase}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Utilizador geral</div>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Cliente</div>
         <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.5 }}>
-          Acesso imediato ao assistente de compliance — adequado para profissionais
-          que consultam regulamentação de dispositivos médicos.
+          Acesso imediato ao copiloto regulatório — adequado a empresas e
+          equipas que desenvolvem dispositivos médicos com IA e precisam de
+          ajuda com MDR, AI Act e documentação técnica.
         </div>
       </Link>
       <Link to="/register/specialist" style={cardBase}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Especialista / Médico</div>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Especialista regulatório</div>
         <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.5 }}>
-          Requer validação manual por um administrador. Submete credenciais
-          profissionais durante o registo.
+          Para engenheiros / consultores especializados em MDR, AI Act, ISO 14971,
+          IEC 62304 e normas associadas. Submete CV ou certificações; a conta
+          fica pendente até validação por um administrador.
         </div>
       </Link>
     </AuthLayout>

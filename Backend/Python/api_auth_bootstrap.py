@@ -68,14 +68,34 @@ DDL_STATEMENTS = [
         CREATE TABLE dbo.specialist_profiles (
             user_id           UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
                                 FOREIGN KEY REFERENCES dbo.auth_users(id) ON DELETE CASCADE,
-            specialty         NVARCHAR(200)    NOT NULL,
-            institution       NVARCHAR(200)    NOT NULL,
-            country           NVARCHAR(100)    NOT NULL,
+            specialty         NVARCHAR(200)    NULL,
+            institution       NVARCHAR(200)    NULL,
+            country           NVARCHAR(100)    NULL,
             rejection_reason  NVARCHAR(MAX)    NULL,
             reviewed_at       DATETIME2        NULL,
             reviewed_by       UNIQUEIDENTIFIER NULL
                                 FOREIGN KEY REFERENCES dbo.auth_users(id)
         );
+    END
+    ELSE
+    BEGIN
+        -- Migração: relaxar NOT NULL nas 3 colunas quando a tabela já existia
+        -- (narrativa do especialista mudou: já não é profissional médico)
+        IF COL_LENGTH('dbo.specialist_profiles', 'specialty') IS NOT NULL
+           AND COLUMNPROPERTY(OBJECT_ID('dbo.specialist_profiles'), 'specialty', 'AllowsNull') = 0
+        BEGIN
+            ALTER TABLE dbo.specialist_profiles ALTER COLUMN specialty NVARCHAR(200) NULL;
+        END
+        IF COL_LENGTH('dbo.specialist_profiles', 'institution') IS NOT NULL
+           AND COLUMNPROPERTY(OBJECT_ID('dbo.specialist_profiles'), 'institution', 'AllowsNull') = 0
+        BEGIN
+            ALTER TABLE dbo.specialist_profiles ALTER COLUMN institution NVARCHAR(200) NULL;
+        END
+        IF COL_LENGTH('dbo.specialist_profiles', 'country') IS NOT NULL
+           AND COLUMNPROPERTY(OBJECT_ID('dbo.specialist_profiles'), 'country', 'AllowsNull') = 0
+        BEGIN
+            ALTER TABLE dbo.specialist_profiles ALTER COLUMN country NVARCHAR(100) NULL;
+        END
     END
     """,
 

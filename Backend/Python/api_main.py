@@ -79,11 +79,13 @@ from api_auth_service import (
 
 from api_traceability_service import (
     init_traceability_schema,
+    list_all_traceability_entries,
     list_traceability_entries,
     log_chat_trace,
     log_regulatory_analysis_trace,
     log_regulatory_document_trace,
     update_traceability_review,
+    update_traceability_review_admin,
 )
 
 from api_template_registry import (
@@ -1682,15 +1684,24 @@ async def auth_register_specialist(
     email: EmailStr = Form(...),
     password: str = Form(..., min_length=8),
     full_name: str = Form(..., min_length=2),
-    specialty: str = Form(..., min_length=2),
-    institution: str = Form(..., min_length=2),
-    country: str = Form(..., min_length=2),
-    credentials: List[UploadFile] = File(..., description="Documentos comprovativos (.pdf, .jpg, .png)."),
+    # Os campos abaixo são opcionais — narrativa atual: engenheiro regulatório
+    # (consultor MDR/AI Act), não médico. Mantidos para informação extra livre.
+    specialty: Optional[str] = Form(default=None, description="(Opcional) Área de especialização regulatória — ex: MDR, AI Act, IEC 62304."),
+    institution: Optional[str] = Form(default=None, description="(Opcional) Empresa ou organização."),
+    country: Optional[str] = Form(default=None, description="(Opcional) País."),
+    credentials: List[UploadFile] = File(..., description="Documentos comprovativos (CV, certificados — .pdf, .jpg, .png)."),
 ) -> Dict[str, Any]:
     if not credentials:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tem de carregar pelo menos um documento.")
     try:
-        user = register_specialist(email, password, full_name, specialty, institution, country)
+        user = register_specialist(
+            email=email,
+            password=password,
+            full_name=full_name,
+            specialty=specialty,
+            institution=institution,
+            country=country,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     for up in credentials:
@@ -1858,6 +1869,321 @@ def admin_create_invite(payload: InviteCreateRequest, admin: AuthUser = Depends(
 @app.get("/admin/invites", tags=["Administração"], summary="Listar convites de admin.")
 def admin_list_invites(_: AuthUser = Depends(require_admin)) -> List[Dict[str, Any]]:
     return list_admin_invites()
+
+
+@app.patch(
+    "/admin/traceability/{trace_id}",
+    tags=["Administração"],
+    summary="Marcar uma entrada da matriz como revista (admin/reviewer).",
+    description=(
+        "Permite a um admin ou especialista atualizar o resultado, severidade, "
+        "tipo de erro e notas de qualquer entrada — independentemente de quem "
+        "a criou. As notas ficam prefixadas com [reviewer:<id>] para mantermos "
+        "pista de quem reviu."
+    ),
+    operation_id="patch_admin_traceability",
+)
+def admin_traceability_update(
+    trace_id: str,
+    payload: TraceabilityReviewRequest,
+    user: AuthUser = Depends(require_admin),
+) -> Dict[str, Any]:
+    try:
+        return update_traceability_review_admin(
+            trace_id=trace_id,
+            reviewer_id=user.id,
+            result=payload.result,
+            error_type=payload.error_type,
+            severity=payload.severity,
+            reviewer_notes=payload.reviewer_notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro a atualizar matriz: {exc}",
+        )
+
+
+@app.patch(
+    "/specialist/traceability/{trace_id}",
+    tags=["Autenticação"],
+    summary="Marcar uma entrada da matriz como revista (especialista).",
+    description=(
+        "Mesmo workflow que o endpoint admin, mas restrito a especialistas "
+        "ativos. Reaproveita a mesma função de update."
+    ),
+    operation_id="patch_specialist_traceability",
+)
+def specialist_traceability_update(
+    trace_id: str,
+    payload: TraceabilityReviewRequest,
+    user: AuthUser = Depends(require_specialist_self),
+) -> Dict[str, Any]:
+    if user.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas especialistas ativos podem rever a matriz.",
+        )
+    try:
+        return update_traceability_review_admin(
+            trace_id=trace_id,
+            reviewer_id=user.id,
+            result=payload.result,
+            error_type=payload.error_type,
+            severity=payload.severity,
+            reviewer_notes=payload.reviewer_notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro a atualizar matriz: {exc}",
+        )
+
+
+@app.get(
+    "/specialist/traceability",
+    dependencies=[Depends(require_specialist_self)],
+    tags=["Autenticação"],
+    summary="Listagem global da matriz para especialistas (mesmos filtros do admin).",
+    operation_id="get_specialist_traceability",
+)
+def specialist_traceability(
+    limit: int = Query(200, ge=1, le=1000),
+    trace_type: Optional[str] = Query(default=None, pattern="^(chat|regulatory_analysis|regulatory_document)$"),
+    result: Optional[str] = Query(default=None, pattern="^(OK|PARCIAL|NOK)$"),
+    severity: Optional[str] = Query(default=None, pattern="^(baixa|média|alta)$"),
+    error_type: Optional[str] = Query(default=None, pattern="^E[1-7]$"),
+    only_pending: bool = Query(default=False),
+    user: AuthUser = Depends(require_specialist_self),
+) -> List[Dict[str, Any]]:
+    if user.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta de especialista ainda não está ativa.",
+        )
+    try:
+        return list_all_traceability_entries(
+            limit=limit,
+            trace_type=trace_type,
+            result=result,
+            severity=severity,
+            error_type=error_type,
+            only_pending=only_pending,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao listar matriz: {exc}",
+        )
+
+
+@app.get(
+    "/admin/traceability",
+    dependencies=[Depends(require_admin)],
+    tags=["Administração"],
+    summary="Listagem global da matriz de rastreabilidade (sem filtro de user).",
+    operation_id="get_admin_traceability",
+)
+def admin_traceability(
+    limit: int = Query(200, ge=1, le=1000),
+    trace_type: Optional[str] = Query(default=None, pattern="^(chat|regulatory_analysis|regulatory_document)$"),
+    result: Optional[str] = Query(default=None, pattern="^(OK|PARCIAL|NOK)$"),
+    severity: Optional[str] = Query(default=None, pattern="^(baixa|média|alta)$"),
+    error_type: Optional[str] = Query(default=None, pattern="^E[1-7]$"),
+    only_pending: bool = Query(default=False, description="Se True, devolve só entradas com result IS NULL"),
+) -> List[Dict[str, Any]]:
+    try:
+        return list_all_traceability_entries(
+            limit=limit,
+            trace_type=trace_type,
+            result=result,
+            severity=severity,
+            error_type=error_type,
+            only_pending=only_pending,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao listar matriz: {exc}",
+        )
+
+
+# ===========================================================================
+# Métricas resumidas por role (alimentam as dashboards)
+# ===========================================================================
+from api_db import db_cursor as _metrics_cursor
+
+
+def _safe_count(cur, sql: str, *params) -> int:
+    try:
+        cur.execute(sql, *params)
+        row = cur.fetchone()
+        return int(row[0]) if row and row[0] is not None else 0
+    except Exception:
+        return 0
+
+
+@app.get(
+    "/admin/metrics/summary",
+    dependencies=[Depends(require_admin)],
+    tags=["Administração"],
+    summary="KPIs agregados para a dashboard do admin.",
+    operation_id="get_admin_metrics_summary",
+)
+def admin_metrics_summary() -> Dict[str, Any]:
+    with _metrics_cursor() as cur:
+        total_users = _safe_count(cur, "SELECT COUNT(*) FROM dbo.auth_users")
+        active_users = _safe_count(cur, "SELECT COUNT(*) FROM dbo.auth_users WHERE role='user' AND status='active'")
+        specialists_active = _safe_count(cur, "SELECT COUNT(*) FROM dbo.auth_users WHERE role='specialist' AND status='active'")
+        specialists_pending = _safe_count(cur, "SELECT COUNT(*) FROM dbo.auth_users WHERE role='specialist' AND status='pending'")
+        admins_total = _safe_count(cur, "SELECT COUNT(*) FROM dbo.auth_users WHERE role='admin'")
+        chats_today = _safe_count(
+            cur,
+            "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE trace_type='chat' AND CAST(created_at AS DATE)=CAST(SYSUTCDATETIME() AS DATE)",
+        )
+        docs_generated = _safe_count(cur, "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE trace_type='regulatory_document'")
+        matrix_pending_review = _safe_count(cur, "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE result IS NULL")
+
+    # Profiles do Copilot (podem não existir se Phase 3 não correu DDL)
+    profiles_total = 0
+    instances_in_progress = 0
+    try:
+        with _metrics_cursor() as cur:
+            profiles_total = _safe_count(cur, "SELECT COUNT(*) FROM dbo.product_profiles")
+            instances_in_progress = _safe_count(
+                cur,
+                "SELECT COUNT(*) FROM dbo.document_instances WHERE state IN ('draft','partial','awaiting')",
+            )
+    except Exception:
+        pass
+
+    return {
+        "users": {"total": total_users, "active": active_users},
+        "specialists": {"active": specialists_active, "pending": specialists_pending},
+        "admins": {"total": admins_total},
+        "activity": {
+            "chats_today": chats_today,
+            "documents_generated_total": docs_generated,
+            "matrix_pending_review": matrix_pending_review,
+        },
+        "copilot": {
+            "product_profiles": profiles_total,
+            "documents_in_progress": instances_in_progress,
+        },
+    }
+
+
+@app.get(
+    "/specialist/metrics/summary",
+    dependencies=[Depends(require_specialist_self)],
+    tags=["Autenticação"],
+    summary="KPIs agregados para a dashboard do especialista.",
+    operation_id="get_specialist_metrics_summary",
+)
+def specialist_metrics_summary(user: AuthUser = Depends(require_specialist_self)) -> Dict[str, Any]:
+    # O especialista é identificado nas notas via prefix [reviewer:<id[:8]>]
+    # que `update_traceability_review_admin()` adiciona quando ele faz revisão.
+    # NÃO podemos filtrar por user_id (que é quem CRIOU a entrada, não quem
+    # reviu).
+    reviewer_tag = f"%[reviewer:{user.id[:8]}]%"
+
+    with _metrics_cursor() as cur:
+        # Pendentes para rever (globais — qualquer reviewer)
+        pending = _safe_count(cur, "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE result IS NULL")
+        my_reviews_total = _safe_count(
+            cur,
+            "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE result IS NOT NULL AND reviewer_notes LIKE ?",
+            reviewer_tag,
+        )
+        my_reviews_today = _safe_count(
+            cur,
+            "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE result IS NOT NULL AND reviewer_notes LIKE ? AND CAST(updated_at AS DATE)=CAST(SYSUTCDATETIME() AS DATE)",
+            reviewer_tag,
+        )
+        approved_ratio_num = _safe_count(
+            cur,
+            "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE result='OK' AND reviewer_notes LIKE ?",
+            reviewer_tag,
+        )
+
+    approval_pct = int(round((approved_ratio_num / my_reviews_total) * 100)) if my_reviews_total else None
+
+    return {
+        "queue": {"pending_review": pending},
+        "personal": {
+            "reviews_total": my_reviews_total,
+            "reviews_today": my_reviews_today,
+            "approval_rate_pct": approval_pct,
+        },
+    }
+
+
+@app.get(
+    "/user/metrics/summary",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Autenticação"],
+    summary="KPIs agregados para a dashboard do utilizador.",
+    operation_id="get_user_metrics_summary",
+)
+def user_metrics_summary(user: AuthUser = Depends(require_chatbot_access)) -> Dict[str, Any]:
+    with _metrics_cursor() as cur:
+        my_chats = _safe_count(
+            cur,
+            "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE trace_type='chat' AND user_id = ?",
+            user.id,
+        )
+        my_docs = _safe_count(
+            cur,
+            "SELECT COUNT(*) FROM dbo.traceability_matrix WHERE trace_type='regulatory_document' AND user_id = ?",
+            user.id,
+        )
+
+    my_profiles = 0
+    my_instances_active = 0
+    my_instances_done = 0
+    try:
+        with _metrics_cursor() as cur:
+            my_profiles = _safe_count(
+                cur,
+                "SELECT COUNT(*) FROM dbo.product_profiles WHERE user_id = ?",
+                user.id,
+            )
+            my_instances_active = _safe_count(
+                cur,
+                """
+                SELECT COUNT(*) FROM dbo.document_instances di
+                JOIN dbo.product_profiles pp ON pp.id = di.product_profile_id
+                WHERE pp.user_id = ? AND di.state IN ('draft','partial','awaiting')
+                """,
+                user.id,
+            )
+            my_instances_done = _safe_count(
+                cur,
+                """
+                SELECT COUNT(*) FROM dbo.document_instances di
+                JOIN dbo.product_profiles pp ON pp.id = di.product_profile_id
+                WHERE pp.user_id = ? AND di.state IN ('reviewed','approved','exported')
+                """,
+                user.id,
+            )
+    except Exception:
+        pass
+
+    return {
+        "activity": {
+            "my_chat_messages": my_chats,
+            "my_documents_generated": my_docs,
+        },
+        "copilot": {
+            "my_product_profiles": my_profiles,
+            "my_documents_in_progress": my_instances_active,
+            "my_documents_completed": my_instances_done,
+        },
+    }
 
 
 # ===========================================================================

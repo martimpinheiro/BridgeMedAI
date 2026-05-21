@@ -279,6 +279,172 @@ def list_traceability_entries(
     return result
 
 
+def list_all_traceability_entries(
+    *,
+    limit: int = 200,
+    trace_type: Optional[str] = None,
+    result: Optional[str] = None,
+    severity: Optional[str] = None,
+    error_type: Optional[str] = None,
+    only_pending: bool = False,
+) -> List[Dict[str, Any]]:
+    """Variante 'admin' que NÃO filtra por user_id. Suporta filtros por
+    trace_type/result/severity/error_type/only_pending (result IS NULL)."""
+    where: List[str] = ["1=1"]
+    params: List[Any] = []
+    if trace_type:
+        where.append("trace_type = ?")
+        params.append(trace_type)
+    if only_pending:
+        where.append("result IS NULL")
+    elif result:
+        where.append("result = ?")
+        params.append(result)
+    if severity:
+        where.append("severity = ?")
+        params.append(severity)
+    if error_type:
+        where.append("error_type = ?")
+        params.append(error_type)
+
+    sql = f"""
+        SELECT TOP (?) id, user_id, conversation_id, trace_type,
+            question, answer, intent,
+            target_docs_json, retrieved_sources_json, generation_sources_json,
+            regulatory_session_id, regulatory_step, download_name,
+            result, error_type, severity, reviewer_notes,
+            created_at, updated_at
+        FROM dbo.traceability_matrix
+        WHERE {' AND '.join(where)}
+        ORDER BY created_at DESC
+    """
+
+    with db_cursor() as cur:
+        cur.execute(sql, limit, *params)
+        rows = cur.fetchall()
+
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        out.append(
+            {
+                "id": str(r[0]),
+                "user_id": str(r[1]),
+                "conversation_id": r[2],
+                "trace_type": r[3],
+                "question": r[4],
+                "answer": r[5],
+                "intent": r[6],
+                "target_docs": _json_load(r[7]) or [],
+                "retrieved_sources": _json_load(r[8]) or [],
+                "generation_sources": _json_load(r[9]) or [],
+                "regulatory_session_id": r[10],
+                "regulatory_step": r[11],
+                "download_name": r[12],
+                "result": r[13],
+                "error_type": r[14],
+                "severity": r[15],
+                "reviewer_notes": r[16],
+                "created_at": _iso(r[17]),
+                "updated_at": _iso(r[18]),
+            }
+        )
+    return out
+
+
+def update_traceability_review_admin(
+    *,
+    trace_id: str,
+    reviewer_id: str,
+    result: Optional[str],
+    error_type: Optional[str],
+    severity: Optional[str],
+    reviewer_notes: Optional[str],
+) -> Dict[str, Any]:
+    """Variante 'admin/specialist' — não filtra por user_id do criador.
+    Pode ser usada por qualquer reviewer (admin ou specialist) para marcar
+    uma entrada como revista, independentemente de quem a criou.
+
+    `reviewer_id` é guardado em `reviewer_notes` como prefixo se as notas
+    não estiverem vazias — para mantermos pista de quem reviu (sem
+    quebrar o schema atual).
+    """
+    now = datetime.now(timezone.utc)
+
+    # Tag de reviewer SEMPRE presente nas notas — independentemente de o
+    # reviewer ter escrito notas ou não. É crucial para o SpecialistDashboard
+    # /SpecialistHistory conseguirem filtrar "as minhas revisões".
+    tag = f"[reviewer:{reviewer_id[:8]}]"
+    if reviewer_notes:
+        if tag in reviewer_notes:
+            notes_with_reviewer = reviewer_notes
+        else:
+            notes_with_reviewer = f"{tag} {reviewer_notes}".strip()
+    else:
+        notes_with_reviewer = tag
+
+    with db_cursor(commit=True) as cur:
+        cur.execute(
+            """
+            UPDATE dbo.traceability_matrix
+               SET result = ?,
+                   error_type = ?,
+                   severity = ?,
+                   reviewer_notes = ?,
+                   updated_at = ?
+             WHERE id = ?
+            """,
+            result,
+            error_type,
+            severity,
+            notes_with_reviewer,
+            now,
+            trace_id,
+        )
+        if cur.rowcount == 0:
+            raise ValueError("Entrada de rastreabilidade não encontrada.")
+
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            SELECT TOP 1 id, user_id, conversation_id, trace_type,
+                   question, answer, intent,
+                   target_docs_json, retrieved_sources_json, generation_sources_json,
+                   regulatory_session_id, regulatory_step, download_name,
+                   result, error_type, severity, reviewer_notes,
+                   created_at, updated_at
+              FROM dbo.traceability_matrix
+             WHERE id = ?
+            """,
+            trace_id,
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise ValueError("Entrada de rastreabilidade desapareceu após update.")
+
+    return {
+        "id": str(row[0]),
+        "user_id": str(row[1]),
+        "conversation_id": row[2],
+        "trace_type": row[3],
+        "question": row[4],
+        "answer": row[5],
+        "intent": row[6],
+        "target_docs": _json_load(row[7]) or [],
+        "retrieved_sources": _json_load(row[8]) or [],
+        "generation_sources": _json_load(row[9]) or [],
+        "regulatory_session_id": row[10],
+        "regulatory_step": row[11],
+        "download_name": row[12],
+        "result": row[13],
+        "error_type": row[14],
+        "severity": row[15],
+        "reviewer_notes": row[16],
+        "created_at": _iso(row[17]),
+        "updated_at": _iso(row[18]),
+    }
+
+
 def update_traceability_review(
     *,
     trace_id: str,
