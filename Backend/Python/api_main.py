@@ -42,6 +42,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from api_rag_service import search_question, answer_question
+
+from api_user_validation_service import build_user_validation_matrix
+
 from api_regulatory_service import (
     analyze_device,
     collect_answers,
@@ -84,8 +87,10 @@ from api_traceability_service import (
     log_chat_trace,
     log_regulatory_analysis_trace,
     log_regulatory_document_trace,
+    request_specialist_review,
     update_traceability_review,
     update_traceability_review_admin,
+    update_user_validation_feedback,
 )
 
 from api_template_registry import (
@@ -1300,6 +1305,11 @@ class TraceabilityEntry(BaseModel):
     reviewer_notes: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    
+    user_feedback_result: Optional[str] = None
+    user_feedback_notes: Optional[str] = None
+    review_requested: bool = False
+    review_requested_at: Optional[str] = None
 
 
 class TraceabilityReviewRequest(BaseModel):
@@ -1307,6 +1317,10 @@ class TraceabilityReviewRequest(BaseModel):
     error_type: Optional[str] = Field(default=None, pattern="^(E1|E2|E3|E4|E5|E6|E7)?$")
     severity: Optional[str] = Field(default=None, pattern="^(baixa|média|alta)?$")
     reviewer_notes: Optional[str] = None
+    
+class UserValidationFeedbackRequest(BaseModel):
+    result: str = Field(..., pattern="^(OK|PARCIAL|NOK)$")
+    notes: Optional[str] = None
 
 
 def _to_response(result: Dict[str, Any]) -> RegulatoryStepResponse:
@@ -1564,6 +1578,86 @@ def traceability_list(
         )
 
 
+@app.get(
+    "/user/validation",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Rastreabilidade"],
+    summary="Matriz de pré-validação automática do utilizador",
+)
+def user_validation_matrix(
+    limit: int = Query(100, ge=1, le=500),
+    conversation_id: Optional[str] = Query(
+        default=None,
+        description="Filtra por conversa específica.",
+    ),
+    user: AuthUser = Depends(require_chatbot_access),
+) -> List[Dict[str, Any]]:
+    try:
+        entries = list_traceability_entries(
+            user_id=user.id,
+            limit=limit,
+            conversation_id=conversation_id,
+        )
+        return build_user_validation_matrix(entries)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao gerar matriz de validação automática: {exc}",
+        )
+
+
+@app.patch(
+    "/user/validation/{trace_id}/feedback",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Rastreabilidade"],
+    summary="Guardar feedback simples do utilizador sobre uma resposta",
+)
+def user_validation_feedback(
+    trace_id: str,
+    payload: UserValidationFeedbackRequest,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return update_user_validation_feedback(
+            trace_id=trace_id,
+            user_id=user.id,
+            result=payload.result,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao guardar feedback do utilizador: {exc}",
+        )
+
+
+@app.post(
+    "/user/validation/{trace_id}/request-review",
+    dependencies=[Depends(require_chatbot_access)],
+    tags=["Rastreabilidade"],
+    summary="Enviar uma entrada para revisão de especialista",
+)
+def user_validation_request_review(
+    trace_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> Dict[str, Any]:
+    try:
+        return request_specialist_review(
+            trace_id=trace_id,
+            user_id=user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao enviar para especialista: {exc}",
+        )
+
+
+
 @app.patch(
     "/traceability/{trace_id}",
     dependencies=[Depends(require_chatbot_access)],
@@ -1636,6 +1730,7 @@ class UpdateSpecialistProfileRequest(BaseModel):
     specialty: Optional[str] = None
     institution: Optional[str] = None
     country: Optional[str] = None
+    
 
 
 def _auth_payload(user: AuthUser, token: str, expires_at) -> Dict[str, Any]:

@@ -6,23 +6,30 @@ import useAsyncList from "./useAsyncList.js";
 import "../admin/admin.css";
 import "../../components/matrix/matrix.css";
 import {
-  PageHeader, Card, Button, StatusPill, Spinner, EmptyState, SectionHeading, KPICard, Grid,
+  PageHeader,
+  Button,
+  StatusPill,
+  Spinner,
+  EmptyState,
+  SectionHeading,
+  KPICard,
+  Grid,
 } from "../../components/ui/index.jsx";
 import {
-  IconCheck, IconX, IconActivity, IconArrowRight, IconChat,
+  IconCheck,
+  IconX,
+  IconActivity,
+  IconChat,
 } from "../../components/ui/Icons.jsx";
 
 /**
- * UserValidation — versão simplificada da matriz para clientes.
+ * UserValidation — matriz do utilizador.
  *
- * O cliente pode marcar AS SUAS PRÓPRIAS interações como "útil/parcial/errado"
- * e deixar uma nota curta para o nosso lado melhorar. Usa o endpoint PATCH
- * /traceability/{id} que filtra por user_id.
- *
- * UI mais simples que admin/specialist:
- *  - Só 3 buttons (✓ útil / ~ parcial / ✗ errado)
- *  - Textarea curta opcional
- *  - Sem severidade nem tipo de erro (o admin/specialist tratam disso depois)
+ * Objetivo:
+ * - mostrar uma pré-validação automática das respostas do chatbot;
+ * - cruzar a resposta com casos de referência internos;
+ * - permitir ao utilizador dar feedback simples: útil / parcial / não útil;
+ * - ajudar a detetar erros antes de enviar para revisão de especialista.
  */
 export default function UserValidation() {
   const { token } = useAuth();
@@ -31,48 +38,80 @@ export default function UserValidation() {
   const [noteDraft, setNoteDraft] = useState("");
 
   const list = useAsyncList(
-    () => apiJson("/traceability?limit=100", { token }),
+    () => apiJson("/user/validation?limit=100", { token }),
     [token]
   );
 
   const stats = useMemo(() => {
-    const s = { total: list.items.length, ok: 0, parcial: 0, nok: 0, pending: 0 };
+    const s = {
+      total: list.items.length,
+      autoOk: 0,
+      autoParcial: 0,
+      autoNok: 0,
+      noCase: 0,
+      feedbackPending: 0,
+    };
+
     for (const e of list.items) {
-      if (!e.result) s.pending++;
-      else if (e.result === "OK") s.ok++;
-      else if (e.result === "PARCIAL") s.parcial++;
-      else if (e.result === "NOK") s.nok++;
+      const status = e.auto_validation?.status;
+
+      if (status === "OK") s.autoOk++;
+      else if (status === "PARCIAL") s.autoParcial++;
+      else if (status === "NOK") s.autoNok++;
+      else s.noCase++;
+
+      if (!e.user_feedback_result) s.feedbackPending++;
     }
+
     return s;
   }, [list.items]);
 
   async function markResult(traceId, result) {
-    setSavingId(traceId);
-    try {
-      await apiJson(`/traceability/${traceId}`, {
-        method: "PATCH",
-        token,
-        body: {
-          result,
-          reviewer_notes: noteDraft.trim() || null,
-          severity: null,
-          error_type: null,
-        },
-      });
-      await list.reload();
-      setOpenId(null);
-      setNoteDraft("");
-    } finally {
-      setSavingId(null);
-    }
+  setSavingId(traceId);
+
+  try {
+    await apiJson(`/user/validation/${traceId}/feedback`, {
+      method: "PATCH",
+      token,
+      body: {
+        result,
+        notes: noteDraft.trim() || null,
+      },
+    });
+
+    await list.reload();
+    setOpenId(null);
+    setNoteDraft("");
+  } finally {
+    setSavingId(null);
   }
+}
+
+async function requestReview(traceId) {
+  setSavingId(traceId);
+
+  try {
+    await apiJson(`/user/validation/${traceId}/request-review`, {
+      method: "POST",
+      token,
+    });
+
+    await list.reload();
+  } finally {
+    setSavingId(null);
+  }
+}
 
   return (
     <>
       <PageHeader
         crumb="Cliente · Qualidade"
-        title={<>Validar <em>respostas</em></>}
-        sub="Diz-nos se as respostas que receberam foram úteis. Isto ajuda-nos a melhorar o copiloto regulatório."
+        title={
+          <>
+            Validar <em>respostas</em>
+          </>
+        }
+        sub="Vê uma pré-validação automática das respostas do chatbot e deixa feedback antes de enviar para revisão especializada."
         actions={
           <Button variant="ghost" size="small" onClick={list.reload}>
             Recarregar
@@ -81,28 +120,54 @@ export default function UserValidation() {
       />
 
       <Grid cols={4} style={{ marginBottom: 24 }}>
-        <KPICard label="Total" value={list.loading ? "…" : stats.total} icon={<IconActivity size={16} />} />
         <KPICard
-          label="Úteis"
-          value={list.loading ? "…" : stats.ok}
+          label="Total"
+          value={list.loading ? "…" : stats.total}
+          icon={<IconActivity size={16} />}
+        />
+
+        <KPICard
+          label="Consistentes"
+          value={list.loading ? "…" : stats.autoOk}
           deltaDir="up"
-          delta={stats.total ? `${Math.round((stats.ok / stats.total) * 100)}%` : ""}
+          delta={stats.total ? `${Math.round((stats.autoOk / stats.total) * 100)}%` : ""}
           icon={<IconCheck size={16} />}
         />
-        <KPICard label="Parciais" value={list.loading ? "…" : stats.parcial} icon={<IconActivity size={16} />} />
-        <KPICard label="Por validar" value={list.loading ? "…" : stats.pending} icon={<IconActivity size={16} />} />
+
+        <KPICard
+          label="Parciais"
+          value={list.loading ? "…" : stats.autoParcial}
+          icon={<IconActivity size={16} />}
+        />
+
+        <KPICard
+          label="Possíveis erros"
+          value={list.loading ? "…" : stats.autoNok}
+          icon={<IconX size={16} />}
+        />
       </Grid>
 
       {list.loading && <Spinner label="A carregar interações" />}
+
       {list.error && (
-        <div style={{ padding: "12px 14px", background: "rgba(162,45,45,0.06)", borderLeft: "3px solid var(--missing)", borderRadius: 4, color: "var(--missing)", fontSize: 13 }}>
+        <div
+          style={{
+            padding: "12px 14px",
+            background: "rgba(162,45,45,0.06)",
+            borderLeft: "3px solid var(--missing)",
+            borderRadius: 4,
+            color: "var(--missing)",
+            fontSize: 13,
+          }}
+        >
           {list.error}
         </div>
       )}
+
       {!list.loading && !list.error && list.items.length === 0 && (
         <EmptyState
           title="Sem interações para validar"
-          message="Usa o chatbot e depois volta aqui para nos dizer se as respostas foram úteis."
+          message="Usa o chatbot e depois volta aqui para veres a pré-validação automática das respostas."
           action={
             <Button as={Link} to="/user/chat">
               <IconChat size={14} /> Abrir chatbot
@@ -114,9 +179,30 @@ export default function UserValidation() {
       {list.items.length > 0 && (
         <>
           <SectionHeading>As tuas interações recentes</SectionHeading>
+
           {list.items.map((e) => {
             const isOpen = openId === e.id;
-            const tone = !e.result ? "muted" : e.result === "OK" ? "ok" : e.result === "PARCIAL" ? "warn" : "bad";
+
+            const feedbackTone =
+              !e.user_feedback_result
+                ? "muted"
+                : e.user_feedback_result === "OK"
+                  ? "ok"
+                  : e.user_feedback_result === "PARCIAL"
+                    ? "warn"
+                    : "bad";
+
+            const auto = e.auto_validation || {};
+
+            const autoTone =
+              auto.status === "OK"
+                ? "ok"
+                : auto.status === "PARCIAL"
+                  ? "warn"
+                  : auto.status === "NOK"
+                    ? "bad"
+                    : "muted";
+
             return (
               <article
                 key={e.id}
@@ -131,36 +217,115 @@ export default function UserValidation() {
                   <div className="admin-row__primary">
                     {(e.question || e.regulatory_step || e.download_name || e.trace_type || "—").slice(0, 110)}
                   </div>
+
                   <div className="admin-row__meta">
                     {e.trace_type} · {(e.created_at || "").slice(0, 16).replace("T", " ")}
                   </div>
                 </div>
+
                 <div className="admin-row__pills">
-                  <StatusPill tone={tone}>{e.result || "Por validar"}</StatusPill>
+                  <StatusPill tone={autoTone}>
+                    {auto.status_label || "Sem pré-validação"}
+                  </StatusPill>
+
+                  <StatusPill tone={feedbackTone}>
+                    {e.user_feedback_result || "Feedback por dar"}
+                  </StatusPill>
                 </div>
 
                 {isOpen && (
-                  <div className="admin-row__expand" onClick={(ev) => ev.stopPropagation()}>
+                  <div
+                    className="admin-row__expand"
+                    onClick={(ev) => ev.stopPropagation()}
+                  >
+                    {auto.status && (
+                      <div style={{ marginBottom: 14 }}>
+                        <Label>Pré-validação automática</Label>
+
+                        <div className="admin-matrix-detail">
+                          <div style={{ marginBottom: 8 }}>
+                            <strong>{auto.status_label || "Sem pré-validação"}</strong>
+
+                            {auto.case && (
+                              <span>
+                                {" "}· Caso: {auto.case.title} · Similaridade:{" "}
+                                {Math.round((auto.match_score || 0) * 100)}%
+                              </span>
+                            )}
+                          </div>
+
+                          {auto.recommendation && (
+                            <div style={{ marginBottom: 10 }}>
+                              {auto.recommendation}
+                            </div>
+                          )}
+
+                          {Array.isArray(auto.checks) && auto.checks.length > 0 && (
+                            <div style={{ display: "grid", gap: 8 }}>
+                              {auto.checks.map((c) => (
+                                <div
+                                  key={c.key}
+                                  style={{
+                                    padding: "8px 10px",
+                                    borderRadius: 8,
+                                    border: "1px solid rgba(0,0,0,0.08)",
+                                    background: c.ok
+                                      ? "rgba(42,120,80,0.06)"
+                                      : "rgba(162,45,45,0.06)",
+                                  }}
+                                >
+                                  <div style={{ fontWeight: 700, fontSize: 13 }}>
+                                    {c.ok ? "✓" : "⚠"} {c.label}
+                                  </div>
+
+                                  <div style={{ fontSize: 12, marginTop: 3 }}>
+                                    Esperado: {c.expected || "—"}
+                                  </div>
+
+                                  <div style={{ fontSize: 12 }}>
+                                    Detetado: {c.observed || "—"}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {e.question && (
                       <div style={{ marginBottom: 10 }}>
                         <Label>A tua pergunta</Label>
-                        <div className="admin-matrix-detail">{e.question}</div>
+                        <div className="admin-matrix-detail">
+                          {e.question}
+                        </div>
                       </div>
                     )}
+
                     {e.answer && (
                       <div style={{ marginBottom: 14 }}>
                         <Label>Resposta do assistant</Label>
-                        <div className="admin-matrix-detail" style={{ maxHeight: 240 }}>{e.answer}</div>
+                        <div
+                          className="admin-matrix-detail"
+                          style={{ maxHeight: 240 }}
+                        >
+                          {e.answer}
+                        </div>
                       </div>
                     )}
 
                     <div className="matrix-review" style={{ marginTop: 0 }}>
                       <div className="matrix-review__head">
-                        <span className="matrix-review__label">A tua avaliação</span>
+                        <span className="matrix-review__label">
+                          A tua avaliação
+                        </span>
                       </div>
 
                       <div className="matrix-review__field">
-                        <label className="matrix-review__field-label">Notas (opcional)</label>
+                        <label className="matrix-review__field-label">
+                          Notas (opcional)
+                        </label>
+
                         <textarea
                           className="matrix-review__textarea"
                           rows={3}
@@ -179,6 +344,7 @@ export default function UserValidation() {
                         >
                           <IconCheck size={12} /> Útil
                         </Button>
+
                         <Button
                           size="small"
                           variant="ghost"
@@ -187,6 +353,7 @@ export default function UserValidation() {
                         >
                           Parcialmente útil
                         </Button>
+
                         <Button
                           size="small"
                           variant="danger"
@@ -195,6 +362,17 @@ export default function UserValidation() {
                         >
                           <IconX size={12} /> Não foi útil
                         </Button>
+
+                        <Button
+                          size="small"
+                          variant="ghost"
+                          onClick={() => requestReview(e.id)}
+                          disabled={savingId === e.id || e.review_requested}
+                        >
+                          {e.review_requested ? "Enviado para especialista" : "Enviar para especialista"}
+                        </Button>
+
+
                       </div>
                     </div>
                   </div>
@@ -210,14 +388,16 @@ export default function UserValidation() {
 
 function Label({ children }) {
   return (
-    <div style={{
-      fontFamily: "var(--mono)",
-      fontSize: 9.5,
-      letterSpacing: "0.16em",
-      textTransform: "uppercase",
-      color: "var(--ink-faded)",
-      marginBottom: 4,
-    }}>
+    <div
+      style={{
+        fontFamily: "var(--mono)",
+        fontSize: 9.5,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: "var(--ink-faded)",
+        marginBottom: 4,
+      }}
+    >
       {children}
     </div>
   );

@@ -1,0 +1,178 @@
+[
+  {
+    "case_id": "MDR-CLASS-THERMO-SIMPLE-001",
+    "title": "Termómetro simples não invasivo",
+    "device_family": "thermometer",
+    "keywords": ["termómetro", "termometro", "simples", "não invasivo", "nao invasivo", "temperatura"],
+    "negative_keywords": ["ia", "algoritmo", "digital", "infravermelhos", "temperatura central"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "I",
+      "mdr_rule": "MDR ANEXO VIII Regra 1",
+      "ai_act_relevant": false
+    },
+    "must_mention": ["finalidade prevista", "classe provável"],
+    "red_flags": ["Classe IIa sem componente ativa", "AI Act sem IA"]
+  },
+  {
+    "case_id": "MDR-CLASS-THERMO-AI-001",
+    "title": "Termómetro digital infravermelhos com IA",
+    "device_family": "thermometer_ai",
+    "keywords": ["termómetro", "termometro", "digital", "infravermelhos", "temperatura central", "IA", "algoritmo"],
+    "required_keywords_any": ["ia", "algoritmo"],
+    "boost_keywords": ["digital", "infravermelhos", "temperatura central"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "IIa",
+      "mdr_rule": "MDR ANEXO VIII Regra 10",
+      "ai_act_relevant": true,
+      "ai_act_reference": "AI_ACT Artigo 6"
+    },
+    "must_mention": ["diagnóstico", "monitorização", "finalidade prevista", "AI Act"],
+    "red_flags": ["Classe I sem ressalva", "não é dispositivo médico sem analisar finalidade prevista"]
+  },
+  {
+    "case_id": "MDR-CLASS-SW-PNEUMONIA-RX-001",
+    "title": "Software de apoio ao diagnóstico de pneumonia em radiografias",
+    "device_family": "diagnostic_software",
+    "keywords": ["software", "pneumonia", "radiografia", "radiografias", "diagnóstico", "diagnostico", "IA"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "IIa",
+      "mdr_rule": "MDR ANEXO VIII Regra 11",
+      "ai_act_relevant": true,
+      "ai_act_reference": "AI_ACT Artigo 6"
+    },
+    "must_mention": ["decisões com fins de diagnóstico", "gravidade da decisão clínica"],
+    "red_flags": ["Classe I", "não mencionar Regra 11"]
+  },
+  {
+    "case_id": "MDR-CLASS-SW-INSULIN-001",
+    "title": "Software que calcula dose de insulina",
+    "device_family": "therapeutic_decision_software",
+    "keywords": ["software", "insulina", "glicemia", "dose", "dosagem", "calcula", "recomenda"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "IIb",
+      "mdr_rule": "MDR ANEXO VIII Regra 11",
+      "ai_act_relevant": false
+    },
+    "allowed_classes": ["IIb", "III"],
+    "must_mention": ["decisão terapêutica", "deterioração grave", "pode passar para Classe III"],
+    "red_flags": ["Classe I", "Classe IIa sem ressalva"]
+  },
+  {
+    "case_id": "MDR-CLASS-CATHETER-URINARY-TEMP-001",
+    "title": "Cateter urinário temporário",
+    "device_family": "urinary_catheter",
+    "keywords": ["cateter", "urinário", "urinario", "uretral", "vesical", "temporário", "temporario"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "I",
+      "mdr_rule": "MDR ANEXO VIII Regra 5",
+      "ai_act_relevant": false
+    },
+    "must_mention": ["utilização temporária", "curto prazo", "longo prazo"],
+    "red_flags": ["Regra 1", "Classe IIb sem duração"]
+  },
+  {
+    "case_id": "MDR-CLASS-ORTHO-IMPLANT-001",
+    "title": "Implante ortopédico permanente sem medicamento",
+    "device_family": "orthopedic_implant",
+    "keywords": ["implante", "ortopédico", "ortopedico", "permanente", "sem medicamento"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "IIb",
+      "mdr_rule": "MDR ANEXO VIII Regra 8",
+      "ai_act_relevant": false
+    },
+    "must_mention": ["implantável", "longo prazo", "exceções Classe III"],
+    "red_flags": ["Classe I", "Regra 1"]
+  },
+  {
+    "case_id": "MDR-CLASS-JOINT-PROSTHESIS-001",
+    "title": "Prótese articular total ou parcial",
+    "device_family": "joint_prosthesis",
+    "keywords": ["prótese articular", "protese articular", "anca", "joelho", "articular"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "III",
+      "mdr_rule": "MDR ANEXO VIII Regra 8",
+      "ai_act_relevant": false
+    },
+    "must_mention": ["prótese articular", "Classe III", "exceção"],
+    "red_flags": ["Classe IIb sem ressalva"]
+  },
+  {
+    "case_id": "MDR-CLASS-CARDIAC-MONITOR-ALERT-001",
+    "title": "Monitor cardíaco com alerta para arritmias perigosas",
+    "device_family": "cardiac_monitoring",
+    "keywords": ["ritmo cardíaco", "ritmo cardiaco", "arritmia", "arritmias", "alerta", "perigo imediato", "ECG"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "IIb",
+      "mdr_rule": "MDR ANEXO VIII Regra 10",
+      "ai_act_relevant": false
+    },
+    "must_mention": ["parâmetros fisiológicos vitais", "perigo imediato"],
+    "red_flags": ["Classe IIa sem analisar perigo imediato"]
+  },
+  {
+    "case_id": "MDR-SCOPE-SMARTWATCH-FITNESS-001",
+    "title": "Smartwatch apenas fitness/bem-estar",
+    "device_family": "wellness",
+    "keywords": ["smartwatch", "fitness", "bem-estar", "wellness", "passos", "sono"],
+    "expected": {
+      "mdr_is_medical_device": false,
+      "mdr_class": null,
+      "mdr_rule": null,
+      "ai_act_relevant": false
+    },
+    "must_mention": ["sem finalidade médica", "claims do fabricante"],
+    "red_flags": ["classificar automaticamente como dispositivo médico"]
+  },
+  {
+    "case_id": "MDR-SCOPE-SMARTWATCH-AF-001",
+    "title": "Smartwatch anunciado para deteção de fibrilhação auricular",
+    "device_family": "cardiac_wearable",
+    "keywords": ["smartwatch", "fibrilhação auricular", "fibrilhacao auricular", "fibrilação auricular", "arritmia"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": null,
+      "mdr_rule": "MDR Artigo 2",
+      "ai_act_relevant": false
+    },
+    "must_mention": ["finalidade médica", "diagnóstico", "monitorização"],
+    "red_flags": ["dizer que continua apenas wellness"]
+  },
+  {
+    "case_id": "MDR-CLASS-INFUSION-PUMP-001",
+    "title": "Dispositivo ativo que administra medicação por perfusão",
+    "device_family": "infusion_pump",
+    "keywords": ["perfusão", "perfusao", "infusão", "infusao", "administra medicação", "administra medicacao", "bomba"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "IIa",
+      "mdr_rule": "MDR ANEXO VIII Regra 12",
+      "ai_act_relevant": false
+    },
+    "allowed_classes": ["IIa", "IIb"],
+    "must_mention": ["potencialmente perigosa", "natureza das substâncias", "modo de aplicação"],
+    "red_flags": ["Regra 10", "Classe I"]
+  },
+  {
+    "case_id": "AI-HIGH-RISK-MEDICAL-AI-001",
+    "title": "Sistema de IA integrado em dispositivo médico sujeito a avaliação de conformidade por terceiro",
+    "device_family": "medical_ai",
+    "keywords": ["IA", "AI Act", "dispositivo médico", "alto risco", "risco elevado", "componente de segurança"],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": null,
+      "mdr_rule": null,
+      "ai_act_relevant": true,
+      "ai_act_reference": "AI_ACT Artigo 6"
+    },
+    "must_mention": ["Artigo 6", "risco elevado", "produto abrangido por legislação de harmonização da União"],
+    "red_flags": ["AI Act não aplicável sem análise"]
+  }
+]
