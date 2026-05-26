@@ -18,7 +18,7 @@ export default function SpecialistQueue() {
   const [savingId, setSavingId] = useState(null);
 
   const list = useAsyncList(
-    () => apiJson("/specialist/traceability?only_pending=true&limit=100", { token }),
+    () => apiJson("/specialist/traceability?only_pending=true&only_review_requested=true&limit=100", { token }),
     [token]
   );
 
@@ -42,8 +42,8 @@ export default function SpecialistQueue() {
     <>
       <PageHeader
         crumb="Especialista · Análise"
-        title={<>Fila de <em>revisão</em></>}
-        sub="Outputs do chatbot a aguardar análise. Abre uma entrada para a rever em detalhe."
+        title={<>Pedidos de <em>revisão</em></>}
+        sub="Entradas que os utilizadores enviaram explicitamente para revisão especializada."
         actions={
           <Button variant="ghost" size="small" onClick={list.reload}>Recarregar</Button>
         }
@@ -57,8 +57,8 @@ export default function SpecialistQueue() {
       )}
       {!list.loading && !list.error && list.items.length === 0 && (
         <EmptyState
-          title="Fila limpa"
-          message="Não há outputs por rever neste momento. Volta noutra altura."
+          title="Sem pedidos enviados"
+          message="Não há pedidos de revisão enviados por utilizadores neste momento."
         />
       )}
 
@@ -83,7 +83,8 @@ export default function SpecialistQueue() {
                   </div>
                 </div>
                 <div className="admin-row__pills">
-                  <StatusPill tone="warn">Por rever</StatusPill>
+                  <StatusPill tone="warn">Pedido pelo utilizador</StatusPill>
+                  <StatusPill tone="muted">Por rever</StatusPill>
                 </div>
                 {isOpen && (
                   <div className="admin-row__expand" onClick={(ev) => ev.stopPropagation()}>
@@ -100,6 +101,25 @@ export default function SpecialistQueue() {
                         <div className="admin-matrix-detail">{e.answer}</div>
                       </div>
                     )}
+
+                    {(e.user_feedback_result || e.user_feedback_notes) && (
+                      <div style={{ marginBottom: 14 }}>
+                        <Label>Feedback do utilizador</Label>
+
+                        <div className="admin-matrix-detail">
+                          {e.user_feedback_result && (
+                            <div style={{ marginBottom: 6 }}>
+                              Resultado do utilizador: <strong>{e.user_feedback_result}</strong>
+                            </div>
+                          )}
+
+                          {e.user_feedback_notes && (
+                            <div>{e.user_feedback_notes}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <MatrixReviewForm
                       entry={e}
                       onSubmit={handleReview}

@@ -11,7 +11,6 @@ import {
   Download,
   ClipboardCheck,
   CheckCircle2,
-  Table2,
   Save,
   XCircle,
 } from "lucide-react";
@@ -1589,7 +1588,7 @@ function EmptyState({ onPick }) {
 }
 
 /* ---------- details panel ---------- */
-function DetailsPanel({ meta, collapsed, onToggle, onOpenTraceability, traceabilityActive, }) {
+function DetailsPanel({ meta, collapsed, onToggle }) {
   if (collapsed) {
     return (
       <aside
@@ -1696,28 +1695,7 @@ function DetailsPanel({ meta, collapsed, onToggle, onOpenTraceability, traceabil
       </button>
     </div>
 
-    <button
-      onClick={onOpenTraceability}
-      className="bmai-pressable"
-      style={{
-        width: "100%",
-        border: "1px solid var(--cream-edge)",
-        background: traceabilityActive ? "var(--forest)" : "var(--cream)",
-        color: traceabilityActive ? "var(--paper)" : "var(--forest)",
-        padding: "10px 12px",
-        borderRadius: 12,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: "pointer",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-      }}
-    >
-      <Table2 size={15} />
-      Ver matriz desta conversa
-    </button>
+
   </div>
 
       <Field label="Intenção detetada">
@@ -2620,6 +2598,185 @@ function TraceabilityPanel({
   );
 }
 
+function DeleteConversationDialog({ title, onCancel, onConfirm }) {
+    useEffect(() => {
+      const onKeyDown = (event) => {
+        if (event.key === "Escape") {
+          onCancel?.();
+        }
+      };
+
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    }, [onCancel]);
+
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirmar eliminação da conversa"
+        onClick={onCancel}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          background: "rgba(15, 27, 21, 0.42)",
+          backdropFilter: "blur(5px)",
+          WebkitBackdropFilter: "blur(5px)",
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+        }}
+      >
+        <div
+          className="bmai-rise bmai-noise"
+          onClick={(event) => event.stopPropagation()}
+          style={{
+            width: "min(440px, 100%)",
+            background: "var(--paper)",
+            border: "1px solid var(--cream-edge)",
+            borderRadius: "var(--r-lg)",
+            boxShadow: "0 24px 80px -32px rgba(15, 27, 21, 0.55)",
+            padding: "22px 24px 20px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 14,
+              marginBottom: 16,
+            }}
+          >
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 12,
+                background: "rgba(162,45,45,0.10)",
+                color: "var(--missing)",
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Trash2 size={18} />
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "var(--ink-faded)",
+                  marginBottom: 6,
+                }}
+              >
+                Apagar conversa
+              </div>
+
+              <h2
+                style={{
+                  fontFamily: "var(--display)",
+                  fontSize: 23,
+                  lineHeight: 1.12,
+                  margin: 0,
+                  color: "var(--ink)",
+                }}
+              >
+                Queres apagar esta conversa?
+              </h2>
+            </div>
+          </div>
+
+          <p
+            style={{
+              margin: "0 0 12px",
+              color: "var(--ink-muted)",
+              fontSize: 14,
+              lineHeight: 1.55,
+            }}
+          >
+            Esta ação remove a conversa do histórico local do chatbot.
+          </p>
+
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              background: "rgba(239,233,212,0.58)",
+              border: "1px solid var(--cream-edge)",
+              color: "var(--forest-deep)",
+              fontSize: 13,
+              fontWeight: 600,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              marginBottom: 18,
+            }}
+            title={title}
+          >
+            {title}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onCancel}
+              className="bmai-pressable"
+              style={{
+                appearance: "none",
+                border: "1px solid var(--cream-edge)",
+                background: "transparent",
+                color: "var(--ink-muted)",
+                borderRadius: "var(--r-pill)",
+                padding: "9px 15px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="bmai-pressable"
+              style={{
+                appearance: "none",
+                border: "1px solid rgba(162,45,45,0.32)",
+                background: "var(--missing)",
+                color: "var(--paper)",
+                borderRadius: "var(--r-pill)",
+                padding: "9px 16px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Trash2 size={14} />
+              Apagar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
 export default function ChatbotApp() {
   const { token, user, logout } = useAuth();
@@ -2631,6 +2788,7 @@ export default function ChatbotApp() {
   const [chatState, setChatState] = useState({ loading: false, error: "" });
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(null);
 
   const [showTraceability, setShowTraceability] = useState(false);
   const [traceabilityEntries, setTraceabilityEntries] = useState([]);
@@ -2672,6 +2830,7 @@ export default function ChatbotApp() {
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const healthCheckInFlight = useRef(false);
 
   const normalizedBaseUrl = useMemo(
     () => apiBaseUrl.trim().replace(/\/$/, ""),
@@ -2750,15 +2909,42 @@ export default function ChatbotApp() {
     return payload;
   }
 
-  async function checkHealth() {
-    setHealth({ state: "loading", data: null, error: "" });
+  async function checkHealth(options = {}) {
+    const { silent = false } = options;
+
+    if (healthCheckInFlight.current) return;
+    healthCheckInFlight.current = true;
+
+    if (!silent) {
+      setHealth({ state: "loading", data: null, error: "" });
+    }
+
     try {
       const data = await callApi("/health", { method: "GET" });
       setHealth({ state: "ok", data, error: "" });
     } catch (error) {
-      setHealth({ state: "error", data: null, error: error.message || "Erro de ligação." });
+      setHealth({
+        state: "error",
+        data: null,
+        error: error.message || "Erro de ligação.",
+      });
+    } finally {
+      healthCheckInFlight.current = false;
     }
   }
+
+
+  useEffect(() => {
+    checkHealth();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        checkHealth({ silent: true });
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [normalizedBaseUrl, token]);
 
   async function fetchTraceability(conversationId = activeConversation?.id) {
     if (!conversationId) {
@@ -2997,20 +3183,40 @@ export default function ChatbotApp() {
 
   function handleDeleteConversation(event, conversationId) {
     event.stopPropagation();
-    const confirmed = window.confirm("Queres mesmo apagar esta conversa?");
-    if (!confirmed) return;
+
+    const conversation = conversations.find((c) => c.id === conversationId);
+
+    setDeleteDialog({
+      id: conversationId,
+      title: conversation?.title || "esta conversa",
+    });
+  }
+
+  function cancelDeleteConversation() {
+    setDeleteDialog(null);
+  }
+
+  function confirmDeleteConversation() {
+    const conversationId = deleteDialog?.id;
+    if (!conversationId) return;
+
     setConversations((prev) => {
       const filtered = prev.filter((c) => c.id !== conversationId);
+
       if (filtered.length === 0) {
         const fallback = createConversation("Nova conversa");
         setActiveConversationId(fallback.id);
         return [fallback];
       }
+
       if (conversationId === activeConversationId) {
         setActiveConversationId(filtered[0].id);
       }
+
       return filtered;
     });
+
+    setDeleteDialog(null);
   }
 
   // ---- Questionnaire (preenchimento conversacional) -----------------------
@@ -3737,7 +3943,7 @@ export default function ChatbotApp() {
                     : "Estado desconhecido"}
                 </div>
                 <button
-                  onClick={checkHealth}
+                  onClick={() => checkHealth()}
                   title="Testar ligação"
                   className="bmai-pressable"
                   style={{
@@ -4185,17 +4391,19 @@ export default function ChatbotApp() {
           meta={currentMeta}
           collapsed={detailsCollapsed}
           onToggle={() => setDetailsCollapsed((v) => !v)}
-          traceabilityActive={showTraceability}
-          onOpenTraceability={() => {
-            setShowTraceability(true);
-            fetchTraceability(activeConversation?.id);
-          }}
         />
       )}
     </>
   )}
 </div>
       </main>
+      {deleteDialog && (
+        <DeleteConversationDialog
+          title={deleteDialog.title}
+          onCancel={cancelDeleteConversation}
+          onConfirm={confirmDeleteConversation}
+        />
+      )}
     </div>
   );
 }

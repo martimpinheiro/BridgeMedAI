@@ -333,11 +333,15 @@ def list_all_traceability_entries(
     severity: Optional[str] = None,
     error_type: Optional[str] = None,
     only_pending: bool = False,
+    only_review_requested: bool = False,
 ) -> List[Dict[str, Any]]:
     """Variante 'admin' que NÃO filtra por user_id. Suporta filtros por
     trace_type/result/severity/error_type/only_pending (result IS NULL)."""
     where: List[str] = ["1=1"]
     params: List[Any] = []
+    
+    if only_review_requested:
+        where.append("review_requested = 1")
     if trace_type:
         where.append("trace_type = ?")
         params.append(trace_type)

@@ -430,3 +430,23 @@
     padding: 0 16px;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   User chatbot embedded
+   Faz o ChatbotApp ocupar toda a área disponível do shell, sem a margem/padding
+   normal usada nas páginas de dashboard/templates/validação.
+   --------------------------------------------------------------------------- */
+
+.bmshell[data-role="user"] .bmshell__content:has(.embedded-chat) {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+}
+
+.bmshell[data-role="user"] .bmshell__content:has(.embedded-chat) .embedded-chat {
+  height: calc(100vh - var(--topbar-h));
+  width: 100%;
+  margin: 0;
+}

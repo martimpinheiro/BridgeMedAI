@@ -2046,6 +2046,7 @@ def specialist_traceability_update(
     summary="Listagem global da matriz para especialistas (mesmos filtros do admin).",
     operation_id="get_specialist_traceability",
 )
+
 def specialist_traceability(
     limit: int = Query(200, ge=1, le=1000),
     trace_type: Optional[str] = Query(default=None, pattern="^(chat|regulatory_analysis|regulatory_document)$"),
@@ -2053,6 +2054,10 @@ def specialist_traceability(
     severity: Optional[str] = Query(default=None, pattern="^(baixa|média|alta)$"),
     error_type: Optional[str] = Query(default=None, pattern="^E[1-7]$"),
     only_pending: bool = Query(default=False),
+    only_review_requested: bool = Query(
+        default=False,
+        description="Se True, devolve só entradas enviadas pelo utilizador para revisão.",
+    ),
     user: AuthUser = Depends(require_specialist_self),
 ) -> List[Dict[str, Any]]:
     if user.status != "active":
@@ -2068,6 +2073,7 @@ def specialist_traceability(
             severity=severity,
             error_type=error_type,
             only_pending=only_pending,
+            only_review_requested=only_review_requested,
         )
     except Exception as exc:
         raise HTTPException(
@@ -2090,6 +2096,10 @@ def admin_traceability(
     severity: Optional[str] = Query(default=None, pattern="^(baixa|média|alta)$"),
     error_type: Optional[str] = Query(default=None, pattern="^E[1-7]$"),
     only_pending: bool = Query(default=False, description="Se True, devolve só entradas com result IS NULL"),
+    only_review_requested: bool = Query(
+    default=False,
+    description="Se True, devolve só entradas enviadas pelo utilizador para revisão.",
+    ),
 ) -> List[Dict[str, Any]]:
     try:
         return list_all_traceability_entries(
@@ -2099,6 +2109,7 @@ def admin_traceability(
             severity=severity,
             error_type=error_type,
             only_pending=only_pending,
+            only_review_requested=only_review_requested,
         )
     except Exception as exc:
         raise HTTPException(

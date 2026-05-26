@@ -174,5 +174,221 @@
     },
     "must_mention": ["Artigo 6", "risco elevado", "produto abrangido por legislação de harmonização da União"],
     "red_flags": ["AI Act não aplicável sem análise"]
+  },
+  {
+    "case_id": "MDR-AI-SCOPE-MEDICAL-DEVICE-AI-001",
+    "title": "Dispositivo médico com IA — enquadramento MDR e AI Act",
+    "device_family": "medical_ai_scope",
+    "keywords": [
+      "regulamentos",
+      "cumprir",
+      "dispositivo médico",
+      "dispositivo medico",
+      "IA",
+      "AI Act",
+      "MDR",
+      "componente de IA",
+      "inteligência artificial",
+      "inteligencia artificial"
+    ],
+    "boost_keywords": [
+      "dispositivo médico com IA",
+      "componente de IA",
+      "AI Act",
+      "MDR"
+    ],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": null,
+      "mdr_rule": "MDR Artigo 2",
+      "ai_act_relevant": true,
+      "ai_act_reference": "AI_ACT Artigo 6"
+    },
+    "must_mention": [
+      "finalidade prevista",
+      "MDR",
+      "AI Act",
+      "risco elevado",
+      "avaliação da conformidade"
+    ],
+    "red_flags": [
+      "não mencionar MDR",
+      "não mencionar AI Act",
+      "dizer que o AI Act não é aplicável sem análise"
+    ]
+  },
+  {
+    "case_id": "MDR-DOC-TECHNICAL-DOCUMENTATION-IIA-001",
+    "title": "Documentação técnica MDR para dispositivo Classe IIa",
+    "device_family": "technical_documentation",
+    "keywords": [
+      "documentação técnica",
+      "documentacao tecnica",
+      "MDR",
+      "Classe IIa",
+      "classe iia",
+      "dispositivo Classe IIa",
+      "dispositivo médico Classe IIa",
+      "documentos exigidos"
+    ],
+    "boost_keywords": [
+      "documentação técnica",
+      "Classe IIa",
+      "Anexo II",
+      "Anexo III"
+    ],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": null,
+      "mdr_rule": "MDR ANEXO II",
+      "ai_act_relevant": false
+    },
+    "must_mention": [
+      "documentação técnica",
+      "descrição do dispositivo",
+      "requisitos gerais de segurança e desempenho",
+      "gestão de risco",
+      "avaliação clínica",
+      "PMS"
+    ],
+    "red_flags": [
+      "dizer que Classe IIa não precisa de documentação técnica",
+      "não mencionar Anexo II",
+      "não mencionar avaliação clínica"
+    ]
+  },
+  {
+    "case_id": "MDR-CONFORMITY-PROCEDURE-STEPS-001",
+    "title": "Procedimento de avaliação da conformidade MDR",
+    "device_family": "conformity_assessment",
+    "keywords": [
+      "procedimento",
+      "avaliação da conformidade",
+      "avaliacao da conformidade",
+      "passos",
+      "MDR",
+      "marcação CE",
+      "marcacao CE",
+      "organismo notificado"
+    ],
+    "boost_keywords": [
+      "procedimento de avaliação da conformidade",
+      "marcação CE",
+      "organismo notificado",
+      "Artigo 52"
+    ],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": null,
+      "mdr_rule": "MDR Artigo 52",
+      "ai_act_relevant": false
+    },
+    "must_mention": [
+      "classe do dispositivo",
+      "procedimento aplicável",
+      "organismo notificado",
+      "documentação técnica",
+      "declaração UE de conformidade",
+      "marcação CE"
+    ],
+    "red_flags": [
+      "dizer que todos os dispositivos seguem o mesmo procedimento",
+      "não mencionar classe do dispositivo",
+      "não mencionar organismo notificado quando aplicável"
+    ]
+  },
+  {
+    "case_id": "MDR-PMCF-THERMO-AI-001",
+    "title": "PMCF para termómetro digital infravermelhos com IA em contexto clínico",
+    "device_family": "pmcf_thermometer_ai",
+    "keywords": [
+      "PMCF",
+      "termómetro",
+      "termometro",
+      "digital",
+      "infravermelhos",
+      "temperatura central",
+      "IA",
+      "algoritmo",
+      "contexto clínico",
+      "profissionais de saúde"
+    ],
+    "required_keywords_any": [
+      "pmcf",
+      "acpc"
+    ],
+    "boost_keywords": [
+      "termómetro digital",
+      "infravermelhos",
+      "temperatura central",
+      "contexto clínico",
+      "profissionais de saúde"
+    ],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": null,
+      "mdr_rule": "MDR ANEXO XIV Ponto 5",
+      "ai_act_relevant": true,
+      "ai_act_reference": "AI_ACT Artigo 6"
+    },
+    "must_mention": [
+      "PMCF",
+      "avaliação clínica",
+      "desempenho clínico",
+      "segurança",
+      "dados pós-comercialização",
+      "plano PMCF",
+      "AI Act"
+    ],
+    "red_flags": [
+      "dizer que PMCF nunca é necessário",
+      "não mencionar avaliação clínica",
+      "não mencionar dados pós-comercialização",
+      "não analisar AI Act apesar da IA"
+    ]
+  },
+  {
+    "case_id": "MDR-CLASS-THERMO-DIGITAL-AI-GENERIC-001",
+    "title": "Termómetro digital com componente de IA",
+    "device_family": "thermometer_ai",
+    "keywords": [
+      "termómetro",
+      "termometro",
+      "digital",
+      "componente de IA",
+      "IA",
+      "algoritmo",
+      "temperatura",
+      "classificar"
+    ],
+    "required_keywords_any": [
+      "ia",
+      "algoritmo",
+      "componente de ia"
+    ],
+    "boost_keywords": [
+      "termómetro digital",
+      "componente de IA",
+      "classificação MDR"
+    ],
+    "expected": {
+      "mdr_is_medical_device": true,
+      "mdr_class": "IIa",
+      "mdr_rule": "MDR ANEXO VIII Regra 10",
+      "ai_act_relevant": true,
+      "ai_act_reference": "AI_ACT Artigo 6"
+    },
+    "must_mention": [
+      "diagnóstico",
+      "monitorização",
+      "finalidade prevista",
+      "Regra 10",
+      "AI Act"
+    ],
+    "red_flags": [
+      "Classe I sem ressalva",
+      "não mencionar Regra 10",
+      "não analisar finalidade prevista"
+    ]
   }
 ]

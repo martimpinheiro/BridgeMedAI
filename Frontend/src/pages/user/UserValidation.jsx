@@ -29,10 +29,12 @@ import {
  * - mostrar uma pré-validação automática das respostas do chatbot;
  * - cruzar a resposta com casos de referência internos;
  * - permitir ao utilizador dar feedback simples: útil / parcial / não útil;
- * - ajudar a detetar erros antes de enviar para revisão de especialista.
+ * - permitir enviar uma entrada para revisão especializada;
+ * - mostrar ao utilizador a revisão/correções devolvidas pelo especialista.
  */
 export default function UserValidation() {
   const { token } = useAuth();
+
   const [savingId, setSavingId] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -50,6 +52,8 @@ export default function UserValidation() {
       autoNok: 0,
       noCase: 0,
       feedbackPending: 0,
+      sentToSpecialist: 0,
+      reviewedBySpecialist: 0,
     };
 
     for (const e of list.items) {
@@ -61,46 +65,63 @@ export default function UserValidation() {
       else s.noCase++;
 
       if (!e.user_feedback_result) s.feedbackPending++;
+      if (e.review_requested) s.sentToSpecialist++;
+      if (e.result) s.reviewedBySpecialist++;
     }
 
     return s;
   }, [list.items]);
 
   async function markResult(traceId, result) {
-  setSavingId(traceId);
+    setSavingId(traceId);
 
-  try {
-    await apiJson(`/user/validation/${traceId}/feedback`, {
-      method: "PATCH",
-      token,
-      body: {
-        result,
-        notes: noteDraft.trim() || null,
-      },
-    });
+    try {
+      await apiJson(`/user/validation/${traceId}/feedback`, {
+        method: "PATCH",
+        token,
+        body: {
+          result,
+          notes: noteDraft.trim() || null,
+        },
+      });
 
-    await list.reload();
-    setOpenId(null);
-    setNoteDraft("");
-  } finally {
-    setSavingId(null);
+      await list.reload();
+      setOpenId(null);
+      setNoteDraft("");
+    } finally {
+      setSavingId(null);
+    }
   }
-}
 
-async function requestReview(traceId) {
-  setSavingId(traceId);
+  async function requestReview(entry) {
+    setSavingId(entry.id);
 
-  try {
-    await apiJson(`/user/validation/${traceId}/request-review`, {
-      method: "POST",
-      token,
-    });
+    try {
+      const notes = noteDraft.trim();
 
-    await list.reload();
-  } finally {
-    setSavingId(null);
+      if (notes) {
+        await apiJson(`/user/validation/${entry.id}/feedback`, {
+          method: "PATCH",
+          token,
+          body: {
+            result: entry.user_feedback_result || "PARCIAL",
+            notes,
+          },
+        });
+      }
+
+      await apiJson(`/user/validation/${entry.id}/request-review`, {
+        method: "POST",
+        token,
+      });
+
+      await list.reload();
+      setOpenId(null);
+      setNoteDraft("");
+    } finally {
+      setSavingId(null);
+    }
   }
-}
 
   return (
     <>
@@ -111,7 +132,7 @@ async function requestReview(traceId) {
             Validar <em>respostas</em>
           </>
         }
-        sub="Vê uma pré-validação automática das respostas do chatbot e deixa feedback antes de enviar para revisão especializada."
+        sub="Vê uma pré-validação automática das respostas do chatbot, envia para revisão especializada e consulta as correções devolvidas."
         actions={
           <Button variant="ghost" size="small" onClick={list.reload}>
             Recarregar
@@ -135,15 +156,15 @@ async function requestReview(traceId) {
         />
 
         <KPICard
-          label="Parciais"
-          value={list.loading ? "…" : stats.autoParcial}
-          icon={<IconActivity size={16} />}
-        />
-
-        <KPICard
           label="Possíveis erros"
           value={list.loading ? "…" : stats.autoNok}
           icon={<IconX size={16} />}
+        />
+
+        <KPICard
+          label="Revistas"
+          value={list.loading ? "…" : stats.reviewedBySpecialist}
+          icon={<IconCheck size={16} />}
         />
       </Grid>
 
@@ -203,6 +224,15 @@ async function requestReview(traceId) {
                     ? "bad"
                     : "muted";
 
+            const specialistTone =
+              !e.result
+                ? "muted"
+                : e.result === "OK"
+                  ? "ok"
+                  : e.result === "PARCIAL"
+                    ? "warn"
+                    : "bad";
+
             return (
               <article
                 key={e.id}
@@ -231,6 +261,20 @@ async function requestReview(traceId) {
                   <StatusPill tone={feedbackTone}>
                     {e.user_feedback_result || "Feedback por dar"}
                   </StatusPill>
+
+                  {e.review_requested && !e.result && (
+                    <StatusPill tone="warn">Enviado para especialista</StatusPill>
+                  )}
+
+                  {e.result && (
+                    <StatusPill tone={specialistTone}>
+                      {e.result === "OK"
+                        ? "Revisto: validado"
+                        : e.result === "PARCIAL"
+                          ? "Revisto: correções"
+                          : "Revisto: erro"}
+                    </StatusPill>
+                  )}
                 </div>
 
                 {isOpen && (
@@ -296,9 +340,7 @@ async function requestReview(traceId) {
                     {e.question && (
                       <div style={{ marginBottom: 10 }}>
                         <Label>A tua pergunta</Label>
-                        <div className="admin-matrix-detail">
-                          {e.question}
-                        </div>
+                        <div className="admin-matrix-detail">{e.question}</div>
                       </div>
                     )}
 
@@ -310,6 +352,80 @@ async function requestReview(traceId) {
                           style={{ maxHeight: 240 }}
                         >
                           {e.answer}
+                        </div>
+                      </div>
+                    )}
+
+                    {e.result && (
+                      <div style={{ marginBottom: 14 }}>
+                        <Label>Revisão do especialista</Label>
+
+                        <div className="admin-matrix-detail">
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                              marginBottom: 10,
+                            }}
+                          >
+                            <StatusPill
+                              tone={
+                                e.result === "OK"
+                                  ? "ok"
+                                  : e.result === "PARCIAL"
+                                    ? "warn"
+                                    : "bad"
+                              }
+                            >
+                              {e.result === "OK"
+                                ? "Validado"
+                                : e.result === "PARCIAL"
+                                  ? "Correções sugeridas"
+                                  : "Possível erro"}
+                            </StatusPill>
+
+                            {e.severity && (
+                              <StatusPill
+                                tone={
+                                  e.severity === "alta"
+                                    ? "bad"
+                                    : e.severity === "média"
+                                      ? "warn"
+                                      : "muted"
+                                }
+                              >
+                                Severidade {e.severity}
+                              </StatusPill>
+                            )}
+
+                            {e.error_type && (
+                              <StatusPill tone="info">{e.error_type}</StatusPill>
+                            )}
+                          </div>
+
+                          {e.reviewer_notes ? (
+                            <div>
+                              {(e.reviewer_notes || "").replace(/^\[reviewer:[^\]]+\]\s*/i, "")}
+                            </div>
+                          ) : (
+                            <div>
+                              O especialista validou esta entrada sem notas adicionais.
+                            </div>
+                          )}
+
+                          {e.updated_at && (
+                            <div
+                              style={{
+                                marginTop: 10,
+                                fontFamily: "var(--mono)",
+                                fontSize: 10,
+                                color: "var(--ink-faded)",
+                              }}
+                            >
+                              Revisto em {(e.updated_at || "").slice(0, 16).replace("T", " ")}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -366,13 +482,13 @@ async function requestReview(traceId) {
                         <Button
                           size="small"
                           variant="ghost"
-                          onClick={() => requestReview(e.id)}
+                          onClick={() => requestReview(e)}
                           disabled={savingId === e.id || e.review_requested}
                         >
-                          {e.review_requested ? "Enviado para especialista" : "Enviar para especialista"}
+                          {e.review_requested
+                            ? "Enviado para especialista"
+                            : "Enviar para especialista"}
                         </Button>
-
-
                       </div>
                     </div>
                   </div>

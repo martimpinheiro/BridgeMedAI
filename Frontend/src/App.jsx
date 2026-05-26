@@ -120,7 +120,7 @@ export default function App() {
           {/* ----------------- USER (Cliente) ----------------- */}
           <Route
             element={
-              <ProtectedRoute roles={["user", "specialist", "admin"]}>
+              <ProtectedRoute roles={["user"]}>
                 <UserLayout />
               </ProtectedRoute>
             }
@@ -135,7 +135,7 @@ export default function App() {
           </Route>
 
           {/* ----------------- Backward compatibility ----------------- */}
-          <Route path="/app" element={<Navigate to="/user/chat" replace />} />
+          <Route path="/app" element={<RootRedirect />} />
 
           {/* ----------------- Fallback ----------------- */}
           <Route path="*" element={<RootRedirect />} />

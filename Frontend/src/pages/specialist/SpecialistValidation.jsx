@@ -19,7 +19,7 @@ export default function SpecialistValidation() {
   const [currentIdx, setCurrentIdx] = useState(0);
 
   const list = useAsyncList(
-    () => apiJson("/specialist/traceability?only_pending=true&limit=50", { token }),
+    () => apiJson("/specialist/traceability?only_pending=true&only_review_requested=true&limit=50", { token }),
     [token]
   );
 
@@ -52,7 +52,10 @@ export default function SpecialistValidation() {
         <PageHeader
           crumb="Especialista · Análise"
           title={<>Validação <em>item-a-item</em></>}
-          sub="Vê uma entrada de cada vez, marca o resultado e avança."
+          sub="Revê, um a um, os pedidos enviados pelos utilizadores."
+          actions={
+            <Button variant="ghost" size="small" onClick={list.reload}>Recarregar fila</Button>
+          }
         />
         <Spinner label="A carregar fila" />
       </>
@@ -165,6 +168,24 @@ export default function SpecialistValidation() {
             <code style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--forest)" }}>
               {entry.intent}
             </code>
+          </div>
+        )}
+
+        {(entry.user_feedback_result || entry.user_feedback_notes) && (
+          <div style={{ marginBottom: 14 }}>
+            <Label>Feedback do utilizador</Label>
+
+            <div className="admin-matrix-detail">
+              {entry.user_feedback_result && (
+                <div style={{ marginBottom: 6 }}>
+                  Resultado do utilizador: <strong>{entry.user_feedback_result}</strong>
+                </div>
+              )}
+
+              {entry.user_feedback_notes && (
+                <div>{entry.user_feedback_notes}</div>
+              )}
+            </div>
           </div>
         )}
 
