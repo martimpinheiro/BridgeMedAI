@@ -40,6 +40,11 @@ from rag_router_utils import (
 )
 from rag_chromadb_service import query_chroma, chroma_has_documents
 
+try:
+    from api_user_documents_service import query_user_documents_for_rag
+except Exception:
+    query_user_documents_for_rag = None
+
 
 # ---------------------------------------------------------------------------
 # Resolução de caminhos e carregamento de configuração
@@ -104,6 +109,11 @@ Regras obrigatórias:
 - Não copies o bloco de contexto recuperado para a resposta final.
 - Usa as fontes apenas para fundamentar a resposta, citando só a etiqueta do campo "Citação:".
 - Não respondas escrevendo "Citação: ... Documento: ... Tipo: ...".
+- O contexto pode conter fontes normativas oficiais e documentos internos do utilizador.
+- As fontes normativas oficiais, como MDR e AI Act, prevalecem sempre sobre documentos internos.
+- Documentos internos do utilizador são contexto complementar e devem ser identificados como documentos internos.
+- Se houver conflito entre documento interno e MDR/AI Act, identifica o conflito e avisa que prevalece a fonte normativa oficial.
+- Quando usares informação de um documento interno, cita exatamente a etiqueta "Documento interno: ...".
 """
 
 
@@ -4215,7 +4225,72 @@ def build_canonical_ai_provider_obligations_answer(
     return f"{fixed}\n\n" + "\n".join(body).strip()
 
 
-def answer_question(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+
+def _user_document_context_records(
+    *,
+    user_id: Optional[str],
+    question: str,
+    max_items: int = 4,
+) -> tuple[List[Dict[str, Any]], List[float]]:
+    if not user_id:
+        return [], []
+
+    if query_user_documents_for_rag is None:
+        return [], []
+
+    try:
+        result = query_user_documents_for_rag(
+            user_id=user_id,
+            question=question,
+            n_results=max_items,
+        )
+    except Exception:
+        return [], []
+
+    records = result.get("records") or []
+    scores = result.get("scores") or []
+
+    return records, scores
+
+
+def _append_user_documents_to_context(
+    *,
+    records: List[Dict[str, Any]],
+    adjusted_scores: List[float],
+    generation_indices: List[int],
+    selected_indices: List[int],
+    user_doc_records: List[Dict[str, Any]],
+    user_doc_scores: List[float],
+) -> tuple[List[Dict[str, Any]], List[float], List[int], List[int]]:
+    if not user_doc_records:
+        return records, adjusted_scores, generation_indices, selected_indices
+
+    combined_records = list(records)
+    combined_scores = list(adjusted_scores)
+    combined_generation_indices = list(generation_indices)
+    combined_selected_indices = list(selected_indices)
+
+    for record, score in zip(user_doc_records, user_doc_scores):
+        idx = len(combined_records)
+        combined_records.append(record)
+        combined_scores.append(float(score))
+        combined_generation_indices.append(idx)
+        combined_selected_indices.append(idx)
+
+    return (
+        combined_records,
+        combined_scores,
+        combined_generation_indices,
+        combined_selected_indices,
+    )
+
+
+def answer_question(
+    question: str,
+    history: Optional[List[Dict[str, str]]] = None,
+    user_id: Optional[str] = None,
+    include_user_documents: bool = True,
+) -> Dict[str, Any]:
     if not OLLAMA_CHAT_MODEL:
         raise ValueError("Falta OLLAMA_CHAT_MODEL no .env")
 
@@ -4306,6 +4381,16 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
     if not generation_indices:
         raise ValueError("Não foi possível selecionar fontes para gerar a resposta.")
     
+    
+    user_doc_records: List[Dict[str, Any]] = []
+    user_doc_scores: List[float] = []
+
+    if include_user_documents and user_id:
+        user_doc_records, user_doc_scores = _user_document_context_records(
+            user_id=user_id,
+            question=retrieval_question,
+            max_items=4,
+        )
     
     canonical_classification_scope_answer = build_canonical_classification_and_scope_answer(
         question=question_clean,
@@ -4410,7 +4495,7 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
         }
         
 
-    if not has_minimum_retrieval_confidence(selected_indices, adjusted_scores):
+    if not has_minimum_retrieval_confidence(selected_indices, adjusted_scores) and not user_doc_records:
         final_answer = build_low_confidence_answer(
             plan,
             generation_indices,
@@ -4426,7 +4511,21 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
             "retrieval_backend": retrieval_backend,
         }
 
-    context = build_context(generation_indices, records)
+    (
+        combined_records,
+        combined_adjusted_scores,
+        combined_generation_indices,
+        combined_selected_indices,
+    ) = _append_user_documents_to_context(
+        records=records,
+        adjusted_scores=adjusted_scores,
+        generation_indices=generation_indices,
+        selected_indices=selected_indices,
+        user_doc_records=user_doc_records,
+        user_doc_scores=user_doc_scores,
+    )
+
+    context = build_context(combined_generation_indices, combined_records)
     system_prompt = get_system_prompt(plan["intent"])
 
     # Só passar histórico ao prompt se for follow-up explícita.
@@ -4454,8 +4553,8 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
     generated_text = improve_answer_if_needed(
         question=question_clean,
         answer=generated_text,
-        generation_indices=generation_indices,
-        records=records,
+        generation_indices=combined_generation_indices,
+        records=combined_records,
         plan=plan,
     )
 
@@ -4464,11 +4563,19 @@ def answer_question(question: str, history: Optional[List[Dict[str, str]]] = Non
     return {
         "intent": plan["intent"],
         "target_docs": plan["target_docs"],
-        "retrieved_sources": records_preview(selected_indices, records, adjusted_scores),
+        "retrieved_sources": records_preview(
+            combined_selected_indices,
+            combined_records,
+            combined_adjusted_scores,
+        ),
         "generation_sources": records_preview(
-            cited_generation_indices(final_answer, generation_indices, records),
-            records,
-            adjusted_scores,
+            cited_generation_indices(
+                final_answer,
+                combined_generation_indices,
+                combined_records,
+            ),
+            combined_records,
+            combined_adjusted_scores,
         ),
         "answer": final_answer,
         "retrieval_backend": retrieval_backend,

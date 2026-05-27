@@ -155,6 +155,14 @@ from api_chat_questionnaire import (
     start_questionnaire,
 )
 
+from api_user_documents_service import (
+    init_user_documents_schema,
+    upload_user_document,
+    list_user_documents,
+    delete_user_document,
+    reprocess_user_document,
+)
+
 # ---------------------------------------------------------------------------
 # Metadados OpenAPI por tags
 # ---------------------------------------------------------------------------
@@ -238,6 +246,13 @@ openapi_tags = [
             "de dependências em falta."
         ),
     },
+    {
+        "name": "Documentos do utilizador",
+        "description": (
+            "Upload, listagem e gestão de documentos privados do utilizador "
+            "que podem ser usados como contexto complementar no chatbot."
+    ),
+},
 ]
 
 
@@ -274,12 +289,18 @@ app = FastAPI(
 def startup_init() -> None:
     try:
         init_traceability_schema()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[STARTUP] Erro ao inicializar traceability schema: {exc}", flush=True)
+
     try:
         init_context_memory_schema()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[STARTUP] Erro ao inicializar context memory schema: {exc}", flush=True)
+
+    try:
+        init_user_documents_schema()
+    except Exception as exc:
+        print(f"[STARTUP] Erro ao inicializar user documents schema: {exc}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +620,21 @@ class ChatResponse(BaseModel):
             }
         }
     }
+    
+    
+class UserDocumentModel(BaseModel):
+    id: str
+    user_id: str
+    original_filename: str
+    stored_filename: str
+    file_path: str
+    mime_type: Optional[str] = None
+    size_bytes: int
+    status: str
+    error_message: Optional[str] = None
+    chunk_count: int = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1111,6 +1147,8 @@ def chat_endpoint(
         result = answer_question(
             payload.question,
             history=payload.history or [],
+            user_id=user.id,
+            include_user_documents=True,
         )
 
         try:
@@ -1188,6 +1226,111 @@ def chat_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro interno durante o processo de retrieval ou geração.",
         )
+
+
+
+
+# ---------------------------------------------------------------------------
+# Documentos privados do utilizador
+# ---------------------------------------------------------------------------
+@app.get(
+    "/user/documents",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=List[UserDocumentModel],
+    tags=["Documentos do utilizador"],
+    summary="Listar documentos privados do utilizador.",
+)
+def user_documents_list(
+    limit: int = Query(100, ge=1, le=500),
+    user: AuthUser = Depends(require_chatbot_access),
+) -> List[UserDocumentModel]:
+    return [
+        UserDocumentModel(**doc)
+        for doc in list_user_documents(user_id=user.id, limit=limit)
+    ]
+
+
+@app.post(
+    "/user/documents/upload",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=UserDocumentModel,
+    tags=["Documentos do utilizador"],
+    summary="Carregar documento privado para contexto do chatbot.",
+)
+async def user_documents_upload(
+    file: UploadFile = File(...),
+    user: AuthUser = Depends(require_chatbot_access),
+) -> UserDocumentModel:
+    try:
+        content = await file.read()
+
+        doc = upload_user_document(
+            user_id=user.id,
+            original_filename=file.filename or "documento",
+            content=content,
+            mime_type=file.content_type or "application/octet-stream",
+        )
+
+        return UserDocumentModel(**doc)
+
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao processar documento: {exc}",
+        )
+
+
+@app.post(
+    "/user/documents/{document_id}/reprocess",
+    dependencies=[Depends(require_chatbot_access)],
+    response_model=UserDocumentModel,
+    tags=["Documentos do utilizador"],
+    summary="Reprocessar documento privado do utilizador.",
+)
+def user_documents_reprocess(
+    document_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> UserDocumentModel:
+    try:
+        return UserDocumentModel(
+            **reprocess_user_document(
+                user_id=user.id,
+                document_id=document_id,
+            )
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao reprocessar documento: {exc}",
+        )
+
+
+@app.delete(
+    "/user/documents/{document_id}",
+    dependencies=[Depends(require_chatbot_access)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Documentos do utilizador"],
+    summary="Apagar documento privado do utilizador.",
+)
+def user_documents_delete(
+    document_id: str,
+    user: AuthUser = Depends(require_chatbot_access),
+) -> None:
+    try:
+        delete_user_document(
+            user_id=user.id,
+            document_id=document_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
 
 
 # ---------------------------------------------------------------------------

@@ -149,6 +149,7 @@ const INTENT_LABELS = {
 const DOC_LABELS = {
   MDR: "MDR 2017/745",
   AI_ACT: "AI Act 2024/1689",
+  USER_DOC: "Documento interno",
   GDPR: "GDPR",
   ISO13485: "ISO 13485",
 };
@@ -937,7 +938,7 @@ function SourcesChecklist({ retrieved = [], generation = [] }) {
               color: "var(--ink)",
             }}
           >
-            Checklist de fontes normativas
+            Checklist de fontes
           </h3>
         </div>
         <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>

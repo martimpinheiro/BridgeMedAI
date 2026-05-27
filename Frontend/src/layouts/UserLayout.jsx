@@ -20,6 +20,7 @@ const NAV = [
     heading: "Trabalhar",
     items: [
       { to: "/user/chat", label: "Chatbot", icon: <IconChat size={16} /> },
+      { to: "/user/documents", label: "Documentos", icon: <IconStack size={16} /> },
       { to: "/user/templates", label: "Templates", icon: <IconStack size={16} /> },
       { to: "/user/validation", label: "Validação", icon: <IconCheckList size={16} /> },
     ],

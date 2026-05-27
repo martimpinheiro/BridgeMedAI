@@ -29,6 +29,11 @@ CHROMA_COLLECTION_NAME = os.getenv(
     "regulations_chunks",
 )
 
+USER_DOCS_CHROMA_COLLECTION_NAME = os.getenv(
+    "USER_DOCS_CHROMA_COLLECTION_NAME",
+    "user_documents_chunks",
+)
+
 
 def get_chroma_client():
     if CHROMA_MODE == "http":
@@ -46,9 +51,13 @@ def get_chroma_client():
     )
 
 
-def get_chroma_collection():
+def get_chroma_collection(name: Optional[str] = None):
     client = get_chroma_client()
-    return client.get_or_create_collection(name=CHROMA_COLLECTION_NAME)
+    return client.get_or_create_collection(name=name or CHROMA_COLLECTION_NAME)
+
+
+def get_user_documents_collection():
+    return get_chroma_collection(USER_DOCS_CHROMA_COLLECTION_NAME)
 
 
 def chroma_has_documents() -> bool:
@@ -56,8 +65,18 @@ def chroma_has_documents() -> bool:
     return collection.count() > 0
 
 
+def user_documents_chroma_has_documents() -> bool:
+    collection = get_user_documents_collection()
+    return collection.count() > 0
+
+
 def chroma_peek(limit: int = 3) -> Dict[str, Any]:
     collection = get_chroma_collection()
+    return collection.get(limit=limit, include=["metadatas", "documents"])
+
+
+def user_documents_chroma_peek(limit: int = 3) -> Dict[str, Any]:
+    collection = get_user_documents_collection()
     return collection.get(limit=limit, include=["metadatas", "documents"])
 
 
@@ -95,3 +114,37 @@ def query_chroma(
         where=where,
         include=["documents", "metadatas", "distances"],
     )
+
+
+def query_user_documents_chroma(
+    query_embedding: List[float],
+    n_results: int = 5,
+    where: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    collection = get_user_documents_collection()
+    return collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results,
+        where=where,
+        include=["documents", "metadatas", "distances"],
+    )
+
+
+def delete_user_document_from_chroma(
+    *,
+    user_id: str,
+    document_id: str,
+) -> None:
+    collection = get_user_documents_collection()
+    try:
+        collection.delete(
+            where={
+                "$and": [
+                    {"user_id": str(user_id)},
+                    {"document_id": str(document_id)},
+                ]
+            }
+        )
+    except Exception:
+        # Não bloquear a app se a collection ainda não existir ou se já não houver chunks.
+        pass

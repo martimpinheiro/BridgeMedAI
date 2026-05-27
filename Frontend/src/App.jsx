@@ -44,6 +44,7 @@ import UserTemplates from "./pages/user/UserTemplates.jsx";
 import UserHistory from "./pages/user/UserHistory.jsx";
 import UserValidation from "./pages/user/UserValidation.jsx";
 import UserProfile from "./pages/user/UserProfile.jsx";
+import UserDocuments from "./pages/user/UserDocuments.jsx";
 import EmbeddedChatbot from "./pages/user/EmbeddedChatbot.jsx";
 
 function RootRedirect() {
@@ -128,6 +129,7 @@ export default function App() {
             <Route path="/user" element={<Navigate to="/user/dashboard" replace />} />
             <Route path="/user/dashboard" element={<UserDashboard />} />
             <Route path="/user/chat" element={<EmbeddedChatbot />} />
+            <Route path="/user/documents" element={<UserDocuments />} />
             <Route path="/user/templates" element={<UserTemplates />} />
             <Route path="/user/history" element={<UserHistory />} />
             <Route path="/user/validation" element={<UserValidation />} />
