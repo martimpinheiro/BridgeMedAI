@@ -1,4 +1,3 @@
-chromadb
 pyodbc
 pymupdf
 python-dotenv
@@ -15,4 +14,4 @@ python-jose[cryptography]
 email-validator
 chromadb==1.5.5
 pytest
-pypdf python-docx
+pypdf
