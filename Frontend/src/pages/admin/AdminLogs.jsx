@@ -4,7 +4,7 @@ import { apiJson } from "../../auth/api.js";
 import useAsyncList from "./useAsyncList.js";
 import "./admin.css";
 import {
-  PageHeader, Card, Button, StatusPill, Spinner, EmptyState, SectionHeading, KPICard, Grid,
+  PageHeader, Card, Button, StatusPill, Spinner, EmptyState, KPICard, Grid,
 } from "../../components/ui/index.jsx";
 import {
   IconActivity, IconChat, IconScroll, IconAlert,
@@ -109,25 +109,6 @@ export default function AdminLogs() {
         </Card>
       </Grid>
 
-      <div style={{ marginTop: 24 }}>
-        <Card variant="quiet">
-          <SectionHeading>Informação técnica</SectionHeading>
-          <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.6 }}>
-            <p style={{ margin: "0 0 8px" }}>
-              <strong style={{ color: "var(--forest)" }}>Backend</strong>: FastAPI com 4 camadas
-              (auth + RAG + regulatory + Copilot). Endpoints documentados em <code>/docs</code>.
-            </p>
-            <p style={{ margin: "0 0 8px" }}>
-              <strong style={{ color: "var(--forest)" }}>Storage</strong>: SQL Server (auth + matriz +
-              context memory), ChromaDB (embeddings regulatórios + templates), Ollama (modelos LLM locais).
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong style={{ color: "var(--forest)" }}>Copilot</strong>: {m?.copilot?.product_profiles ?? 0} perfis
-              de produto, {m?.copilot?.documents_in_progress ?? 0} documentos em curso.
-            </p>
-          </div>
-        </Card>
-      </div>
     </>
   );
 }

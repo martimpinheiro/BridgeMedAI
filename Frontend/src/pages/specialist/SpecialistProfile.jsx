@@ -1,7 +1,7 @@
 import React from "react";
 import { useAuth } from "../../auth/AuthContext.jsx";
 import {
-  PageHeader, Card, Grid, SectionHeading, StatusPill, Button,
+  PageHeader, Card, Grid, StatusPill,
 } from "../../components/ui/index.jsx";
 
 export default function SpecialistProfile() {
@@ -38,19 +38,6 @@ export default function SpecialistProfile() {
         </Card>
       </Grid>
 
-      <div style={{ marginTop: 24 }}>
-        <Card variant="quiet">
-          <SectionHeading>Edição de perfil</SectionHeading>
-          <p style={{ margin: "0 0 12px", fontSize: 13.5, color: "var(--ink-muted)", lineHeight: 1.55 }}>
-            Para atualizar as tuas áreas de expertise, organização, ou para
-            resubmeter credenciais, contacta o administrador. Numa próxima
-            iteração ficará disponível diretamente aqui.
-          </p>
-          <Button variant="ghost" size="small" disabled>
-            Editar perfil (em breve)
-          </Button>
-        </Card>
-      </div>
     </>
   );
 }

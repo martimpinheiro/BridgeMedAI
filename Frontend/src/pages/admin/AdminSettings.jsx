@@ -1,7 +1,7 @@
 import React from "react";
 import { useAuth } from "../../auth/AuthContext.jsx";
 import {
-  PageHeader, Card, Grid, SectionHeading, StatusPill,
+  PageHeader, Card, Grid, StatusPill,
 } from "../../components/ui/index.jsx";
 
 export default function AdminSettings() {
@@ -31,18 +31,6 @@ export default function AdminSettings() {
         </Card>
       </Grid>
 
-      <div style={{ marginTop: 24 }}>
-        <Card variant="quiet">
-          <SectionHeading>Em breve</SectionHeading>
-          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, color: "var(--ink-muted)", lineHeight: 1.8 }}>
-            <li>Gestão de modelos LLM (escolher modelo de chat / embeddings / regulatório)</li>
-            <li>Editar regras do questionário de candidatura de especialistas</li>
-            <li>Branding por organização (logo, paleta de cor)</li>
-            <li>Webhooks para integração com sistemas externos</li>
-            <li>Política de retenção de dados</li>
-          </ul>
-        </Card>
-      </div>
     </>
   );
 }

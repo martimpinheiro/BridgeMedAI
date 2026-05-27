@@ -114,18 +114,6 @@ export default function UserProfile() {
         </Card>
       </div>
 
-      <div style={{ marginTop: 24 }}>
-        <Card variant="quiet">
-          <SectionHeading>Edição de perfil</SectionHeading>
-          <p style={{ margin: "0 0 12px", fontSize: 13.5, color: "var(--ink-muted)", lineHeight: 1.55 }}>
-            Para mudar email ou password, contacta um administrador. Numa
-            próxima iteração ficará disponível diretamente aqui.
-          </p>
-          <Button variant="ghost" size="small" disabled>
-            Editar conta (em breve)
-          </Button>
-        </Card>
-      </div>
     </>
   );
 }
