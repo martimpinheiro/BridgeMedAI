@@ -521,6 +521,19 @@ def _get_traceability_entry_by_id(
         "review_requested": bool(row[21]) if row[21] is not None else False,
         "review_requested_at": _iso(row[22]),
     }
+    
+    
+def get_traceability_entry_global(
+    *,
+    trace_id: str,
+) -> Dict[str, Any]:
+    """
+    Devolve uma entrada da matriz sem filtrar pelo user criador.
+
+    Usado por endpoints de admin/especialista, onde o reviewer precisa
+    consultar uma entrada enviada por qualquer utilizador.
+    """
+    return _get_traceability_entry_by_id(trace_id=trace_id)
 
 
 def update_traceability_review_admin(

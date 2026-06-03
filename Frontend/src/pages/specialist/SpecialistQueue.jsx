@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../../auth/AuthContext.jsx";
-import { apiJson } from "../../auth/api.js";
+import { apiDownload, apiJson } from "../../auth/api.js";
 import useAsyncList from "./useAsyncList.js";
 import "../admin/admin.css";
 import {
@@ -16,6 +16,8 @@ export default function SpecialistQueue() {
   const { token } = useAuth();
   const [expanded, setExpanded] = useState(null);
   const [savingId, setSavingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadError, setDownloadError] = useState("");
 
   const list = useAsyncList(
     () => apiJson("/specialist/traceability?only_pending=true&only_review_requested=true&limit=100", { token }),
@@ -35,6 +37,24 @@ export default function SpecialistQueue() {
       setExpanded(null);
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleDownload = async (entry) => {
+    if (!entry?.id) return;
+
+    setDownloadingId(entry.id);
+    setDownloadError("");
+
+    try {
+      await apiDownload(`/specialist/traceability/${entry.id}/download`, {
+        token,
+        filename: entry.download_name || "documento_regulatorio.docx",
+      });
+    } catch (err) {
+      setDownloadError(err.message || "Erro ao descarregar documento.");
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -60,6 +80,12 @@ export default function SpecialistQueue() {
           title="Sem pedidos enviados"
           message="Não há pedidos de revisão enviados por utilizadores neste momento."
         />
+      )}
+
+      {downloadError && (
+        <div style={{ padding: "12px 14px", background: "rgba(162,45,45,0.06)", borderLeft: "3px solid var(--missing)", borderRadius: 4, color: "var(--missing)", fontSize: 13, marginBottom: 12 }}>
+          {downloadError}
+        </div>
       )}
 
       {list.items.length > 0 && (
@@ -102,6 +128,26 @@ export default function SpecialistQueue() {
                       </div>
                     )}
 
+                    {canDownloadEntry(e) && (
+                      <div style={{ marginBottom: 14 }}>
+                        <Label>Documento gerado</Label>
+                        <div className="admin-matrix-detail">
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                            <span>📎 {e.download_name || "Documento regulatório gerado"}</span>
+
+                            <Button
+                              size="small"
+                              variant="ghost"
+                              disabled={downloadingId === e.id}
+                              onClick={() => handleDownload(e)}
+                            >
+                              {downloadingId === e.id ? "A descarregar..." : "Descarregar documento"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {(e.user_feedback_result || e.user_feedback_notes) && (
                       <div style={{ marginBottom: 14 }}>
                         <Label>Feedback do utilizador</Label>
@@ -133,6 +179,13 @@ export default function SpecialistQueue() {
         </>
       )}
     </>
+  );
+}
+
+function canDownloadEntry(entry) {
+  return (
+    entry?.trace_type === "regulatory_document" &&
+    (entry?.download_name || entry?.regulatory_session_id)
   );
 }
 

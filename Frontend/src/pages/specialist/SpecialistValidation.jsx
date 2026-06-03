@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../auth/AuthContext.jsx";
-import { apiJson } from "../../auth/api.js";
+import { apiDownload, apiJson } from "../../auth/api.js";
 import useAsyncList from "./useAsyncList.js";
 import "../admin/admin.css";
 import {
@@ -16,6 +16,8 @@ import { IconArrowRight } from "../../components/ui/Icons.jsx";
 export default function SpecialistValidation() {
   const { token } = useAuth();
   const [savingId, setSavingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadError, setDownloadError] = useState("");
   const [currentIdx, setCurrentIdx] = useState(0);
 
   const list = useAsyncList(
@@ -39,6 +41,24 @@ export default function SpecialistValidation() {
       await list.reload();
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleDownload = async (entry) => {
+    if (!entry?.id) return;
+
+    setDownloadingId(entry.id);
+    setDownloadError("");
+
+    try {
+      await apiDownload(`/specialist/traceability/${entry.id}/download`, {
+        token,
+        filename: entry.download_name || "documento_regulatorio.docx",
+      });
+    } catch (err) {
+      setDownloadError(err.message || "Erro ao descarregar documento.");
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -128,6 +148,14 @@ export default function SpecialistValidation() {
         </div>
       </div>
 
+
+      {downloadError && (
+        <div style={{ padding: "12px 14px", background: "rgba(162,45,45,0.06)", borderLeft: "3px solid var(--missing)", borderRadius: 4, color: "var(--missing)", fontSize: 13, marginBottom: 12 }}>
+          {downloadError}
+        </div>
+      )}
+
+
       <Card>
         <div style={{ marginBottom: 14 }}>
           <Label>Tipo</Label>
@@ -158,6 +186,26 @@ export default function SpecialistValidation() {
             <Label>Resposta do assistant</Label>
             <div className="admin-matrix-detail" style={{ maxHeight: 360 }}>
               {entry.answer}
+            </div>
+          </div>
+        )}
+
+        {canDownloadEntry(entry) && (
+          <div style={{ marginBottom: 14 }}>
+            <Label>Documento gerado</Label>
+            <div className="admin-matrix-detail">
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <span>📎 {entry.download_name || "Documento regulatório gerado"}</span>
+
+                <Button
+                  size="small"
+                  variant="ghost"
+                  disabled={downloadingId === entry.id}
+                  onClick={() => handleDownload(entry)}
+                >
+                  {downloadingId === entry.id ? "A descarregar..." : "Descarregar documento"}
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -196,6 +244,13 @@ export default function SpecialistValidation() {
         />
       </Card>
     </>
+  );
+}
+
+function canDownloadEntry(entry) {
+  return (
+    entry?.trace_type === "regulatory_document" &&
+    (entry?.download_name || entry?.regulatory_session_id)
   );
 }
 

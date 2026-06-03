@@ -23,6 +23,7 @@ A lógica de negócio associada à pesquisa e geração de respostas encontra-se
 isolada no módulo `api_rag_service`.
 """
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import (
@@ -46,6 +47,7 @@ from api_rag_service import search_question, answer_question
 from api_user_validation_service import build_user_validation_matrix
 
 from api_regulatory_service import (
+    PMCF_OUTPUT_DIR,
     analyze_device,
     collect_answers,
     generate_document,
@@ -55,6 +57,7 @@ from api_regulatory_service import (
     skip_remaining_and_generate,
     start_collection,
 )
+
 from api_auth_service import (
     AuthUser,
     approve_specialist,
@@ -81,6 +84,7 @@ from api_auth_service import (
 
 
 from api_traceability_service import (
+    get_traceability_entry_global,
     init_traceability_schema,
     list_all_traceability_entries,
     list_traceability_entries,
@@ -92,7 +96,6 @@ from api_traceability_service import (
     update_traceability_review_admin,
     update_user_validation_feedback,
 )
-
 from api_template_registry import (
     RegistryError,
     get_record,
@@ -2142,6 +2145,84 @@ def admin_traceability_update(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro a atualizar matriz: {exc}",
         )
+
+
+_DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _resolve_regulatory_document_path(entry: Dict[str, Any]) -> Path:
+    """
+    Resolve o ficheiro físico associado a uma entrada regulatory_document.
+
+    Primeiro tenta usar a sessão em memória via get_generated_path(session_id).
+    Se o backend tiver sido reiniciado e a sessão já não existir em memória,
+    tenta encontrar o ficheiro pelo download_name dentro da PMCF_OUTPUT_DIR.
+    """
+    session_id = entry.get("regulatory_session_id")
+    download_name = entry.get("download_name")
+
+    if session_id:
+        try:
+            return get_generated_path(session_id)
+        except FileNotFoundError:
+            pass
+
+    if download_name:
+        safe_name = Path(download_name).name
+        candidate = (PMCF_OUTPUT_DIR / safe_name).resolve()
+        base = PMCF_OUTPUT_DIR.resolve()
+
+        if (
+            str(candidate).startswith(str(base))
+            and candidate.exists()
+            and candidate.is_file()
+        ):
+            return candidate
+
+    raise FileNotFoundError("Documento gerado não encontrado no servidor.")
+
+
+
+@app.get(
+    "/specialist/traceability/{trace_id}/download",
+    tags=["Autenticação"],
+    summary="Especialista descarrega documento gerado associado a uma entrada da matriz.",
+    operation_id="get_specialist_traceability_document_download",
+)
+def specialist_traceability_document_download(
+    trace_id: str,
+    user: AuthUser = Depends(require_specialist_self),
+):
+    if user.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas especialistas ativos podem descarregar documentos para revisão.",
+        )
+
+    try:
+        entry = get_traceability_entry_global(trace_id=trace_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    if entry.get("trace_type") != "regulatory_document":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta entrada não corresponde a um documento regulatório gerado.",
+        )
+
+    try:
+        path = _resolve_regulatory_document_path(entry)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    filename = entry.get("download_name") or path.name
+
+    return FileResponse(
+        path=str(path),
+        media_type=_DOCX_MEDIA_TYPE,
+        filename=filename,
+    )
+    
 
 
 @app.patch(
