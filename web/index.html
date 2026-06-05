@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BridgeMedAI — Integrated Compliance Framework</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <div class="logo-icon">
+                <span class="sq sq1"></span><span class="sq sq2"></span>
+                <span class="sq sq3"></span><span class="sq sq4"></span>
+            </div>
+            <span class="logo-text">BridgeMed<span class="highlight">AI</span></span>
+        </div>
+        <div class="nav-links">
+            <a href="#about" data-i18n="navAbout">Sobre</a>
+            <a href="#features" data-i18n="navFeatures">Funcionalidades</a>
+            <a href="#architecture" data-i18n="navArch">Arquitetura</a>
+            <a href="#simulator" data-i18n="navSim">Simulador</a>
+            <a href="#roadmap" data-i18n="navRoadmap">Roadmap</a>
+        </div>
+        <div class="lang-switch">
+            <button onclick="setLanguage('pt')" id="btn-pt" class="active">PT</button>
+            <span class="divider">/</span>
+            <button onclick="setLanguage('en')" id="btn-en">EN</button>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-badge" data-i18n="heroBadge">PECI — Grupo 6 | Universidade de Aveiro</div>
+        <h1 data-i18n="heroTitle">Framework Integrado de Conformidade para Dispositivos Médicos com IA</h1>
+        <p data-i18n="heroSub">Centralize o mapeamento regulatório do MDR, AI Act e normas ISO/IEC. Automatize matrizes de rastreabilidade e acelere a geração de documentação técnica com validação humana assistida por LLM.</p>
+        <div class="hero-buttons">
+            <a href="#video" class="btn btn-primary" data-i18n="btnExplore">Ver Vídeo</a>
+            <a href="#architecture" class="btn btn-secondary" data-i18n="btnPlatform">Arquitetura</a>
+        </div>
+    </header>
+
+    <section id="about" class="container">
+        <h2 data-i18n="aboutTitle" class="section-title">Contexto e Inovação Académica</h2>
+        <div class="grid about-grid">
+            <div class="card problem-card">
+                <h3 data-i18n="problemTitle">O Desafio Regulatório</h3>
+                <p data-i18n="aboutP1">O crescimento de dispositivos médicos baseados em Inteligência Artificial trouxe novos desafios de conformidade regulatória. Os fabricantes necessitam de cumprir simultaneamente o MDR, o AI Act e várias normas ISO/IEC, o que gera sobreposição de obrigações, redundância documental e risco de inconsistências.</p>
+            </div>
+            <div class="card solution-card">
+                <h3 data-i18n="solutionTitle">A Solução BridgeMedAI</h3>
+                <p data-i18n="aboutP2">O BridgeMedAI propõe um ecossistema integrado que fornece mapeamento estruturado de requisitos e matrizes automáticas de rastreabilidade. Atua como um assistente inteligente que apoia (sem nunca substituir) a revisão e auditoria humana especializada.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="container">
+        <h2 data-i18n="featuresTitle" class="section-title">Objetivos & Requisitos do Sistema</h2>
+        <div class="grid features-grid">
+            <div class="card feature-box">
+                <div class="icon">🧩</div>
+                <h3 data-i18n="feat1Title">Mapeamento de Sobreposições</h3>
+                <p data-i18n="feat1Desc">Identificação automática de redundâncias e conflitos regulatórios entre MDR e o futuro EU AI Act.</p>
+            </div>
+            <div class="card feature-box">
+                <div class="icon">🔗</div>
+                <h3 data-i18n="feat2Title">Rastreabilidade Ponta a Ponta</h3>
+                <p data-i18n="feat2Desc">Modelo dinâmico unificado conectando diretamente o Requisito Regulatório ➔ Evidência Técnica ➔ Documento.</p>
+            </div>
+            <div class="card feature-box">
+                <div class="icon">📄</div>
+                <h3 data-i18n="feat3Title">Templates Normalizados</h3>
+                <p data-i18n="feat3Desc">Repositório inteligente contendo templates estruturados para GSPR, análise de risco e conformidade.</p>
+            </div>
+            <div class="card feature-box">
+                <div class="icon">🤖</div>
+                <h3 data-i18n="feat4Title">Geração Assistida via LLM</h3>
+                <p data-i18n="feat4Desc">Uso avançado de modelos de linguagem para geração inicial de rascunhos de documentação técnica complexa.</p>
+            </div>
+        </div>
+
+        <div class="req-tables grid">
+            <div class="card req-list">
+                <h3 data-i18n="reqFuncTitle" class="accent-blue">Requisitos Funcionais</h3>
+                <ul>
+                    <li data-i18n="rf1">Gestão de Normas e Regulamentos</li>
+                    <li data-i18n="rf2">Mapeamento de Sobreposições Cruzadas</li>
+                    <li data-i18n="rf3">Geração Automatizada de Matrizes</li>
+                    <li data-i18n="rf4">Validação Humana Obrigatória (Human-in-the-loop)</li>
+                    <li data-i18n="rf5">Gestão de Workflows de Conformidade</li>
+                </ul>
+            </div>
+            <div class="card req-list">
+                <h3 data-i18n="reqNonFuncTitle" class="accent-green">Requisitos Não Funcionais</h3>
+                <ul>
+                    <li data-i18n="rnf1">Usabilidade e Interface Intuitiva</li>
+                    <li data-i18n="rnf2">Privacidade e Proteção Rigorosa de Dados</li>
+                    <li data-i18n="rnf3">Fiabilidade e Prevenção Ativa de Alucinações</li>
+                    <li data-i18n="rnf4">Rastreio de Auditoria Transparente (Audit Trail)</li>
+                    <li data-i18n="rnf5">Arquitetura Modular Altamente Escalável</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="architecture" class="container">
+        <h2 data-i18n="archTitle" class="section-title">Arquitetura da Plataforma</h2>
+        <p class="section-subtitle" data-i18n="archSub">Design focado em modularidade, segurança e isolamento de dados corporativos.</p>
+        
+        <div class="arch-figure">
+            <img src="img/arch.png" alt="Arquitetura da Plataforma" class="arch-img">
+        </div>
+    </section>
+
+    <section id="video" class="container">
+        <h2 data-i18n="videoTitle" class="section-title">Vídeo de Apresentação</h2>
+        <p class="section-subtitle" data-i18n="videoSub">Uma síntese curta da proposta, do fluxo regulatório e do simulador demonstrado nesta página.</p>
+
+        <div class="video-card card">
+            <video controls width="100%">
+                <source src="vid.mp4" type="video/mp4">
+                O seu navegador não suporta a tag de vídeo.
+            </video>
+        </div>
+    </section>
+
+    <section id="simulator" class="container">
+        <h2 data-i18n="simTitle" class="section-title">Workflow Prático: ThermoAI</h2>
+        <p class="section-subtitle" data-i18n="simSub">Clique nos passos abaixo para simular a análise regulatória de um Termómetro Inteligente com IA.</p>
+        <div class="sim-wrapper grid">
+            <div class="sim-controls">
+                <button onclick="goToStep(1)" id="step1-btn" class="sim-btn active">1 — Submeter Projeto</button>
+                <button onclick="goToStep(2)" id="step2-btn" class="sim-btn">2 — Pré-validação Automática</button>
+                <button onclick="goToStep(3)" id="step3-btn" class="sim-btn">3 — Revisão por Especialista</button>
+                <button onclick="goToStep(4)" id="step4-btn" class="sim-btn">4 — Pré-preenchimento Documental</button>
+                <button onclick="goToStep(5)" id="step5-btn" class="sim-btn">5 — Verificação Final & Export</button>
+            </div>
+
+            <div class="sim-display card">
+                <div class="sim-header">
+                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                    <span class="sim-app-title">BridgeMedAI Platform v1.0</span>
+                </div>
+                <div id="sim-content" class="sim-body">
+                    <div class="sim-top">
+                        <div class="arch-ref">Fluxo ilustrado segundo a <a href="#architecture">Arquitetura da Plataforma</a></div>
+                    </div>
+
+                    <div class="sim-status-grid" id="sim-status-grid">
+                        <!-- status cards rendered by script -->
+                    </div>
+
+                    <div id="sim-logs" class="sim-logs">
+                        <!-- logs rendered here -->
+                    </div>
+
+                    <div id="sim-draft" class="sim-draft">
+                        <!-- generated draft document -->
+                    </div>
+
+                    <div class="sim-controls-row">
+                        <button id="prev-btn" class="btn btn-secondary" onclick="prevStep()">Anterior</button>
+                        <button id="next-btn" class="btn btn-primary" onclick="nextStep()">Próximo</button>
+                        <button id="reset-btn" class="btn" onclick="resetSim()">Reset</button>
+                        <button id="export-btn" class="btn" onclick="exportDoc()" style="display:none">Exportar</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="personas" class="container">
+        <h2 data-i18n="personasTitle" class="section-title">Principais Vantagens do Projeto</h2>
+        <p class="section-subtitle" data-i18n="personasSub">Três ganhos centrais para equipas clínicas, regulatórias e técnicas.</p>
+        <div class="grid personas-grid">
+            <div class="card persona-card advantage-card advantage-card--1">
+                <div class="advantage-topline">
+                    <span class="advantage-index">01</span>
+                    <span class="advantage-tag">Regulatory Flow</span>
+                </div>
+                <div class="avatar">⚡</div>
+                <h3 data-i18n="per1Role">Conformidade regulatória acelerada</h3>
+                <p data-i18n="per1Desc">Centraliza o mapeamento entre MDR e AI Act, reduzindo análise manual e tornando a leitura regulatória muito mais rápida e consistente.</p>
+            </div>
+            <div class="card persona-card advantage-card advantage-card--2">
+                <div class="advantage-topline">
+                    <span class="advantage-index">02</span>
+                    <span class="advantage-tag">Traceability</span>
+                </div>
+                <div class="avatar">🔗</div>
+                <h3 data-i18n="per2Role">Rastreabilidade ponta a ponta</h3>
+                <p data-i18n="per2Desc">Liga requisitos, evidências e documentação técnica num fluxo único, facilitando auditorias, revisões internas e validação de consistência.</p>
+            </div>
+            <div class="card persona-card advantage-card advantage-card--3">
+                <div class="advantage-topline">
+                    <span class="advantage-index">03</span>
+                    <span class="advantage-tag">Human-in-the-loop</span>
+                </div>
+                <div class="avatar">🧠</div>
+                <h3 data-i18n="per3Role">Validação humana assistida por IA</h3>
+                <p data-i18n="per3Desc">Gera apoio inteligente sem substituir o especialista, preservando o controlo clínico e regulatório sobre o resultado final.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="roadmap" class="container">
+        <h2 data-i18n="roadmapTitle" class="section-title">Roadmap de Desenvolvimento</h2>
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <div class="timeline-date">Fase 1</div>
+                <h3 data-i18n="phase1Title">Análise e Extração de Requisitos</h3>
+                <p data-i18n="phase1Desc">Estudo aprofundado do MDR, AI Act e normas ISO/IEC aplicáveis. Identificação precisa de conflitos regulatórios.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <div class="timeline-date">Fase 2</div>
+                <h3 data-i18n="phase2Title">Desenho do Framework</h3>
+                <p data-i18n="phase2Desc">Modelação da arquitetura e definição dos workflows de verificação com a criação de templates unificados.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <div class="timeline-date">Fase 3</div>
+                <h3 data-i18n="phase3Title">Desenvolvimento do Protótipo</h3>
+                <p data-i18n="phase3Desc">Implementação do backend em FastAPI e integração do assistente inteligente com ChromaDB e LLM.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <div class="timeline-date">Fase 4</div>
+                <h3 data-i18n="phase4Title">Aplicação ao Caso de Estudo</h3>
+                <p data-i18n="phase4Desc">Execução ponta a ponta do framework utilizando o cenário real do dispositivo inteligente ThermoAI.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <div class="timeline-date">Fase 5</div>
+                <h3 data-i18n="phase5Title">Avaliação e Auditoria</h3>
+                <p data-i18n="phase5Desc">Execução de uma auditoria simulada rigorosa com base em checklists regulatórios reais da indústria.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-dot"></div>
+                <div class="timeline-date">Fase 6</div>
+                <h3 data-i18n="phase6Title">Consolidação e Defesa</h3>
+                <p data-i18n="phase6Desc">Finalização da documentação técnica e elaboração do relatório final de projeto para a defesa na Universidade.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content container">
+            <div class="footer-block">
+                <h5>BridgeMed<span class="highlight">AI</span></h5>
+                <p data-i18n="footerTag">Framework de Conformidade de Dispositivos Médicos com IA</p>
+                <p class="academic-label">PECI — Grupo 6 | 2026</p>
+            </div>
+            <div class="footer-block">
+                <h5 data-i18n="footTeamTitle">Equipa de Desenvolvimento</h5>
+                <ul class="team-list">
+                    <li>José Mota <a href="mailto:jfteixeiramota@ua.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li><li>Mafalda França <a href="mailto:mafaldaalmeidafranca@ua.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li>
+                    <li>Leonardo Luís <a href="mailto:leonardo.luis@ua.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li><li>Martim Pinheiro <a href="mailto:martim@ua.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li>
+                    <li>Rodrigo Lopes <a href="mailto:rmllopes@ua.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li><li>João Figueiredo <a href="mailto:joaofafigueiredo@ua.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li>
+                </ul>
+            </div>
+            <div class="footer-block">
+                <h5 data-i18n="footOrientTitle">Equipa de Orientação</h5>
+                <ul class="team-list">
+                    <li>Filipe Sousa <a href="mailto:filipe.sousa@aicos.fraunhofer.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/></a>
+</svg></li>
+                    <li>Eduardo Barbosa <a href="mailto:eduardo.barbosa@aicos.fraunhofer.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li>
+                    <li>Inês Lopes <a href="mailto:ines.lopes@aicos.fraunhofer.pt"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-envelope-at" viewBox="0 0 16 16">
+  <path d="M2 2a2 2 0 0 0-2 2v8.01A2 2 0 0 0 2 14h5.5a.5.5 0 0 0 0-1H2a1 1 0 0 1-.966-.741l5.64-3.471L8 9.583l7-4.2V8.5a.5.5 0 0 0 1 0V4a2 2 0 0 0-2-2zm3.708 6.208L1 11.105V5.383zM1 4.217V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v.217l-7 4.2z"/>
+  <path d="M14.247 14.269c1.01 0 1.587-.857 1.587-2.025v-.21C15.834 10.43 14.64 9 12.52 9h-.035C10.42 9 9 10.36 9 12.432v.214C9 14.82 10.438 16 12.358 16h.044c.594 0 1.018-.074 1.237-.175v-.73c-.245.11-.673.18-1.18.18h-.044c-1.334 0-2.571-.788-2.571-2.655v-.157c0-1.657 1.058-2.724 2.64-2.724h.04c1.535 0 2.484 1.05 2.484 2.326v.118c0 .975-.324 1.39-.639 1.39-.232 0-.41-.148-.41-.42v-2.19h-.906v.569h-.03c-.084-.298-.368-.63-.954-.63-.778 0-1.259.555-1.259 1.4v.528c0 .892.49 1.434 1.26 1.434.471 0 .896-.227 1.014-.643h.043c.118.42.617.648 1.12.648m-2.453-1.588v-.227c0-.546.227-.791.573-.791.297 0 .572.192.572.708v.367c0 .573-.253.744-.564.744-.354 0-.581-.215-.581-.8Z"/>
+</svg></a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-block footer-logos-column">
+                <h5>Apoio Institucional</h5>
+                <div class="vertical-logo-stack">
+                    <div class="logo-container-placeholder">
+                        <a href="https://www.ua.pt/deti">
+                        <img src="./img/deti.png" alt="DETI - Universidade de Aveiro" ></a>
+                    </div>
+                    <div class="logo-container-placeholder">
+                        <a href="https://www.aicos.fraunhofer.pt/">
+                        <img src="./img/fraunhofer.png" alt="Fraunhofer Portugal AICOS"></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="logo-footer-bar">
+            <div class="legal-info-container">
+                <p>© 2026 BridgeMedAI. Todos os direitos reservados. Isenção de responsabilidade técnica: Esta plataforma constitui um protótipo de cariz estritamente académico e de apoio à decisão, não substituindo pareceres regulatórios ou auditorias institucionais oficiais.</p>
+            </div>
+        </div>
+    </footer>
+    <script src="script.js"></script>
+</body>
+</html>
