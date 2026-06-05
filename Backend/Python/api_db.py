@@ -31,20 +31,26 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 DB_SERVER = os.getenv("DB_SERVER")
 DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_TRUSTED_CONNECTION = os.getenv("DB_TRUSTED_CONNECTION", "yes")
 DB_ENCRYPT = os.getenv("DB_ENCRYPT", "yes")
 
 
 def _build_connection_string() -> str:
-    return (
-        "DRIVER={ODBC Driver 17 for SQL Server};"
+    driver = os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")
+    conn_str = (
+        f"DRIVER={{{driver}}};"
         f"SERVER={DB_SERVER};"
         f"DATABASE={DB_NAME};"
-        f"Trusted_Connection={DB_TRUSTED_CONNECTION};"
         f"Encrypt={DB_ENCRYPT};"
         "TrustServerCertificate=yes;"
     )
-
+    if DB_TRUSTED_CONNECTION.lower() == "yes":
+        conn_str += "Trusted_Connection=yes;"
+    else:
+        conn_str += f"UID={DB_USER};PWD={DB_PASSWORD};"
+    return conn_str
 
 def get_connection() -> pyodbc.Connection:
     """Cria uma ligação ao SQL Server configurado no `.env` do backend."""

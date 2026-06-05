@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 
 const STORAGE_KEY = "bridgemedai.auth";
-export const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+// Permite configurar a rota da API globalmente através de ficheiros .env, útil quando testar noutra máquina.
+export const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 const AuthContext = createContext(null);
 
